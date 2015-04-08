@@ -5,13 +5,13 @@ import numpy as np
 import png
 import matplotlib.pyplot as plt
 from scipy.misc import imread
+from datetime import datetime as dt
 
 # image handling 
 import scipy.ndimage.interpolation
 
 # fits file handling and creation
 import pyfits
-from datetime import datetime as dt
 
 """
 PSF modeling script:
@@ -34,6 +34,7 @@ Mar 10th: Code cleaned and polar2cart: theta fixed.
 
 Mar 11th: .fits creation with header information corresponding to Tiny Tim's. Possibility to change pixel scale, defaulted as constant with wavelength.
 
+Apr 8th: code cleaned and rebinning to detector resolution removed from main().
 """
 
 #--------------------------------------------------
@@ -91,6 +92,7 @@ def aperture(size=101,ap=None):
 
     return A
 
+#/aperture
 #--------------------------------------------------
 
 def imageToAperture(image):
@@ -107,6 +109,7 @@ def imageToAperture(image):
         image_2d=im
     return image_2d
 
+#/imageToAperture
 #--------------------------------------------------
 
 def psf(A,L=.76,scaleFactor=5,dist=[0,0,0,0,0,0,0,0]):
@@ -144,6 +147,7 @@ def psf(A,L=.76,scaleFactor=5,dist=[0,0,0,0,0,0,0,0]):
     print '----------\nPSF computed'
     return PSF
 
+#/psf
 #--------------------------------------------------
 
 def pupil(A,L=.76,dist=[0,0,0,0,0,0,0,0]):
@@ -156,6 +160,7 @@ def pupil(A,L=.76,dist=[0,0,0,0,0,0,0,0]):
     print '... done'
     return P
 
+#/pupil
 #--------------------------------------------------
 
 def pathDiff(size=101,L=.76,dist=[0.,0.,0.,0.,0.,0.,0.,0.]):
@@ -217,6 +222,7 @@ def pathDiff(size=101,L=.76,dist=[0.,0.,0.,0.,0.,0.,0.,0.]):
 
     return cartesian_Z
 
+#/pathDiff
 #--------------------------------------------------
 
 def Rnm(n,m,r):
@@ -226,6 +232,7 @@ def Rnm(n,m,r):
         R += (((-1)**s*np.math.factorial(n-s))/(np.math.factorial(s)*np.math.factorial((n+m)/2-s)*np.math.factorial((n-m)/2-s)))*r**(n-2*s)
     return R 
 
+#/Rnm
 #--------------------------------------------------
 
 def Zeven(n,m,r,theta):
@@ -234,6 +241,7 @@ def Zeven(n,m,r,theta):
     Z = np.sqrt(n+1)*Rnm(n,m,r)*np.sqrt(2)*np.cos(m*theta)
     return Z
 
+#/Zeven
 #--------------------------------------------------
 
 def Zodd(n,m,r,theta):
@@ -242,6 +250,7 @@ def Zodd(n,m,r,theta):
     Z = np.sqrt(n+1)*Rnm(n,m,r)*np.sqrt(2)*np.sin(m*theta)
     return Z
 
+#/Zodd
 #--------------------------------------------------
 
 def polar2cart(coords,size=101):
@@ -261,6 +270,7 @@ def polar2cart(coords,size=101):
     theta*=(size-1)/(2*np.pi)
     return (theta,r)
 
+#/polar2cart
 #--------------------------------------------------
 
 def jitter(PSF,jitterSize):
@@ -271,6 +281,7 @@ def jitter(PSF,jitterSize):
     OTF=np.fft.ifft2(OTF)
     return
 
+#/jitter
 #--------------------------------------------------
 
 def bin2detector(coords,L,size,detectorScale):
@@ -293,6 +304,7 @@ def bin2detector(coords,L,size,detectorScale):
     y=(coords[0]-size//2.)*detectorScale/scaleFactor+(size//2.)
     return (y,x)
 
+#/bin2detector
 #--------------------------------------------------
 
 def resizePSF(PSF,L=.76,size=505,scale=0.110):
@@ -303,6 +315,7 @@ def resizePSF(PSF,L=.76,size=505,scale=0.110):
     print '... done'
     return newPSF
 
+#/resizePSF
 #--------------------------------------------------
 
 def createFits(PSF,disto=[0,0,0,0,0,0,0,0],pixelScale=0.0251,wavelength=0.76):
@@ -336,6 +349,7 @@ def createFits(PSF,disto=[0,0,0,0,0,0,0,0],pixelScale=0.0251,wavelength=0.76):
     print '... done'
     return
 
+#/createFits
 #==================================================
 
 def main():
@@ -348,17 +362,16 @@ def main():
     PSF=psf(A,L,5,dist)
     size=np.shape(PSF)[0] # size of the array
 
-    pixelScale=0.110 # WFI pixel scale
     #with constant pixelScale, the size of the PSF will vary with the wavelength
     #and its sampling too.
-
-    newPSF=resizePSF(PSF,L,size,pixelScale)
-    #plt.imshow(newPSF,origin='lower',interpolation='nearest')
-    #plt.show()
-
-    createFits(newPSF,pixelScale=pixelScale,wavelength=L,disto=dist)
+    pixelScale=0.110 # WFI pixel scale
+    #newPSF=resizePSF(PSF,L,size,pixelScale)
+    #by commenting the line below, the PSF is oversampled.
+    
+    createFits(PSF,pixelScale=pixelScale,wavelength=L,disto=dist)
     return
 
+#/main
 #==================================================
 
 if __name__=='__main__':
