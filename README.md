@@ -6,7 +6,7 @@ Development:
 
 You can install a development environment on an Ubuntu system with:
 
-    sudo apt-get install build-eddential
+    sudo apt-get install build-essential
     make setup
 
 Testing:
