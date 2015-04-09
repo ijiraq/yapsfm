@@ -1,5 +1,4 @@
 #! /usr/bin/env python
-
 """
 PSF modeling script:
 the pupil function P(x,y) = A(x,y) exp(2 \pi i OPD(x,y) / \lambda)
@@ -24,8 +23,7 @@ Mar 10th: Code cleaned and polar2cart: theta fixed.
 Mar 11th: .fits creation with header information corresponding to Tiny Tim's. Possibility to change pixel scale,
 defaulted as constant with wavelength.
 
-Apr 9th: Code cleaned, and python golden rule applied to ease readability.
-
+Apr 9th: PEP8 code clean and docstrings creation
 """
 
 import numpy as np
@@ -45,7 +43,17 @@ def aperture(size=101, ap=None):
     """
     Defines the aperture as an array containing 0s (obstructed) and 1s (unobstructed).
 
-    for HST-like aperture:
+    This method is deprecated and will be replaced with a .fits image aperture input.
+
+    :param size: size of the array defining the aperture.
+    :type size: int, taken as odd to have a middle.
+    :param ap: name of the telescope to model.
+    :type ap: str, currently only "HST" or None is supported. If None, a simple circular aperture is used.
+    :return A: array containing 0s and 1s representing obstruction of light
+    :rtype: np.array
+    """
+    """
+        for HST-like aperture:
     secondary mirror obstruction: 0.330
     spider width: 0.022
     pads:(v3(x), v2(y), radius) x, y are arbitrarily chosen here
@@ -54,14 +62,8 @@ def aperture(size=101, ap=None):
     3: -0.4564 -0.7606 0.065
     ----------
     if nothing specified: circular aperture is used.
-
-    :param size: size of the array defining the aperture.
-    :type: int, taken as odd to have a middle.
-    :param ap: name of the telescope to model.
-    :type: str, currently only "HST" or None is supported. If None, a simple circular aperture is used.
-    :return A: array containing 0s and 1s representing obstruction of light
-    :rtype: np.array
     """
+
 
     A = np.zeros((size, size))
 
@@ -105,35 +107,28 @@ def aperture(size=101, ap=None):
 # --------------------------------------------------
 
 
-def imageToAperture(image):
-    """transforms a black and white image into an aperture array, where
-    0 = obstructed, 1 = unobstructed"""
-
-    im = imread(image).astype(np.float32)
-    im /= 255.
-    if len(np.shape(im)) > 2:
-        # only take the R component of RGB img (supposedly gray scale so R=G=B)
-        image_2d = im[:, :, 0]
-    else:
-        # if the image has only 1 plane
-        image_2d = im
-    return image_2d
-
-# --------------------------------------------------
-
-
 def psf(A, L=.76, scaleFactor=5, dist=[0, 0, 0, 0, 0, 0, 0, 0]):
+    """
+    Compute the PSF at wavelength L, using aperture A and optical distortions dist
+    corresponding to Zernike modes 4 to 11 (defocus to spherical)
+
+    :param A: aperture array of 0s and 1s
+    :type A: np.array
+    :param L: wavelength at which to compute the PSF, in microns
+    :type L: float
+    :param scaleFactor: zero-padding factor for FFT. It adds 2x the size of the array in 0s on all sides of the
+    initial array
+    :type scaleFactor: int
+    :param dist: Zernike coefficient values for Z4 (defocus) to Z11 (spherical). Given in values of rms waves at .547um.
+    :type dist: np.array
+    :return: PSF image
+    :rtype: np.array
+    """
+
     """fft=complex numbers: amplitude AND phase
     We take the modulus square --> distribution of light
     L is the wavelength, same units as OPD (microns)
     np.fft.fft2 manages zero-padding on each axis with s[0],s[1] corresponding to both x and y axis.
-    ====================
-    with a zero-padding factor of 5,
-    the pixel scale of the PSF image is 0.0088''/pixel.
-    
-    Since: 
-    6 pixel @ .76um = 1.22*.76um/(2.4*10**6um) = 0.0797'' ,
-    1 pixel @ .76um = 0.0797'' / 6 pixels = 0.133''/px
     """
 
     P = pupil(A, L, dist)
@@ -142,17 +137,13 @@ def psf(A, L=.76, scaleFactor=5, dist=[0, 0, 0, 0, 0, 0, 0, 0]):
     print 'Starting FFT with zero-padding factor of %s...' % (scaleFactor)
     tmp = np.fft.fft2(P, s=[scaled[0], scaled[1]])  # padding with 0s
 
-    # switch quadrant to place the origin in the middle of the array
-    tmp = np.fft.fftshift(tmp)
+    tmp = np.fft.fftshift(tmp)  # switch quadrant to place the origin in the middle of the array
 
-    # modulus square of the complex matrices
     print '... done'
     PSF = np.real(np.multiply(tmp, np.conjugate(tmp)))
     print '----------\nPSF image size: (%s,%s)' % (np.shape(PSF)[0], np.shape(PSF)[1])
     print 'lambda = %s' % (L)
-    print "pixel size = 0.110''/px"
-    # print "Pixel size at .76mu: %.4f''"%(1.22*(7.6*10**(-7))/2.4*206264.81) # for Lambda=1. 1 rad = 206264.81 arcsec
-    # print "PSF size: 5 pixels"
+    print "pixel size @ 0.76um: 0.0133''/px"
 
     print '----------\nPSF computed'
     return PSF
@@ -161,11 +152,24 @@ def psf(A, L=.76, scaleFactor=5, dist=[0, 0, 0, 0, 0, 0, 0, 0]):
 
 
 def pupil(A, L=.76, dist=[0, 0, 0, 0, 0, 0, 0, 0]):
+    """
+    Compute the pupil function for aperture A, wavelength L and optical distortions dist
+
+    :param A: aperture function
+    :type A: np.array
+    :param L: wavelength in microns
+    :type L: float
+    :param dist: Zernike coefficient values for Z4 (defocus) to Z11 (spherical)
+    :type param: np.array
+    :return: the pupil function evaluated at each point of an array
+    :rtype: np.array
+    """
+
     """P = A exp(2pi i OPD / L), L=lambda"""
 
     print 'Computing pupil...'
     size = np.shape(A)[0]
-    OPD = pathDiff(size, L, dist)
+    OPD = pathDiff(size, L, dist)  # the optical path difference (OPD)
     P = np.multiply(A, np.exp(np.divide(2j*np.pi*OPD, L)))
     print '... done'
     return P
@@ -174,6 +178,19 @@ def pupil(A, L=.76, dist=[0, 0, 0, 0, 0, 0, 0, 0]):
 
 
 def pathDiff(size=101, L=.76, dist=[0., 0., 0., 0., 0., 0., 0., 0.]):
+    """
+    Computes the optical path differences at wavelength L for optical distortions dist.
+
+    :param size: the array size on which to compute the OPD
+    :type size: int
+    :param L: wvelength in microns
+    :type L: float
+    :param dist: Zernike coefficient values for Z4 (defocus) to Z11 (spherical)
+    :type dist: np.array
+    :return: an array of OPD
+    :rtype: np.array
+    """
+
     """
     ==================================================
     Optical Path Differences for pupil characterization
@@ -188,7 +205,7 @@ def pathDiff(size=101, L=.76, dist=[0., 0., 0., 0., 0., 0., 0., 0.]):
     has a different coefficient, depending on the wavelength.
     ==================================================
     Method:
-    Compute the Zernike mode(s) and multiply each of them by its coefficient (from Zmax file).
+    Compute the Zernike mode(s) and multiply each of them by its coefficient.
     The matrix of the Zernike values is in polar coordinates. Has to be
     transformed back to cartesian.
     ==================================================
@@ -196,21 +213,14 @@ def pathDiff(size=101, L=.76, dist=[0., 0., 0., 0., 0., 0., 0., 0.]):
     Zernike coefficient values are given in microns RMS of wave at 547 microns
     """
 
-    # defocus,z5,z6,z7,z8,z9,z10,z11
-    # Aj=[-0.0068802,0.016,-0.006,-0.003,-0.003,0.011,0.02,-0.0348] #microns
-    # Aj=[-0.001,0.002,-0.002,-0.001,0.0002,0.,0.001,-0.002]
-    # Aj=[0.0026,0.0089,0.0222,-0.0018,0.0113,0.,0.,0.]
-    Znm = [(2, 0), (2, -2), (2, 2), (3, -1), (3, 1), (3, -3), (3, 3), (4, 0)]
+    Znm = [(2, 0), (2, -2), (2, 2), (3, -1), (3, 1), (3, -3), (3, 3), (4, 0)]  # defocus,z5,z6,z7,z8,z9,z10,z11
 
-    # Creation of matrices
     rhorange = np.linspace(0, 1, size)
     thetarange = np.linspace(0, 2*np.pi, size)
     rho, theta = np.meshgrid(rhorange, thetarange)
     
-    # OPD = Sum aj Zj
     Ztot = np.zeros((size, size))
     for i in range(len(dist)):
-        # aj=dist[i]
         aj = dist[i]*.547/L  # Zernike coefficient at wavelength L. L and .547 in microns
         print 'Computing Z%s with aj=%s' % (4+i, aj)
         n, m = Znm[i][0], Znm[i][1]
@@ -218,17 +228,17 @@ def pathDiff(size=101, L=.76, dist=[0., 0., 0., 0., 0., 0., 0., 0.]):
             Z = Zodd(n, -m, rho, theta)
         else:
             Z = Zeven(n, m, rho, theta)
-        # Z *= aj
-        Ztot += np.multiply(Z, aj)
-    print 'Saving Ztot'
-    # print type(Ztot[50][50])
-    plt.imshow(Ztot)
-    plt.savefig('Ztot.png')
+        Ztot += np.multiply(Z, aj)  # OPD = Sum aj Zj
+    print 'OPD computed...'
+    # print 'Saving Ztot'
+    # plt.imshow(Ztot)
+    # plt.savefig('Ztot.png')
 
     cartesian_Z = scipy.ndimage.interpolation.geometric_transform(Ztot, polar2cart, extra_arguments=(size,))
-    print 'Saving cartesian_Z'
-    plt.imshow(cartesian_Z)
-    plt.savefig('cartesian_Z.png')
+    print '... and converted back to cartesian space.'
+    # print 'Saving cartesian_Z'
+    # plt.imshow(cartesian_Z)
+    # plt.savefig('cartesian_Z.png')
 
     return cartesian_Z
 
@@ -236,7 +246,19 @@ def pathDiff(size=101, L=.76, dist=[0., 0., 0., 0., 0., 0., 0., 0.]):
 
 
 def Rnm(n, m, r):
-    """computes the radial part R_n^m(r) for r a mesh grid object"""
+    """
+    Computes the radial part R_n^m(r), with r a meshgrid object
+
+    :param n: radial order of the polynomial
+    :type n: int
+    :param m: azimuthal order of the polynomial
+    :type m: int
+    :param r: radial position
+    :type r: float
+    :return: radial part of the Zernike mode at position r
+    :rtype: float
+    """
+
     R = 0
     for s in range((n-m)/2+1):
         R += (((-1)**s*np.math.factorial(n-s))/(np.math.factorial(s)*np.math.factorial((n+m)/2-s)*np.math.factorial((n-m)/2-s)))*r**(n-2*s)
@@ -246,8 +268,21 @@ def Rnm(n, m, r):
 
 
 def Zeven(n, m, r, theta):
-    """computes the even Zernike Polynomials
-    r,theta are mesh grid objects"""
+    """
+    Computes the even Zernike mode
+
+    :param n: radial order of the mode
+    :type n: int
+    :param m: azimuthal order of the mode
+    :type m: int
+    :param r: radial position
+    :type r: float
+    :param theta: angle
+    :type theta: float
+    :return: the value of the Zernike mode corresponding to n and m, at position (r,theta).
+    :rtype: float
+    """
+
     Z = np.sqrt(n+1)*Rnm(n, m, r)*np.sqrt(2)*np.cos(m*theta)
     return Z
 
@@ -255,8 +290,21 @@ def Zeven(n, m, r, theta):
 
 
 def Zodd(n, m, r, theta):
-    """calculates the odd Zernike Polynomials
-    r,theta are mesh grid objects"""
+    """
+    Computes the odd Zernike mode
+
+    :param n: radial order of the mode
+    :type n: int
+    :param m: azimuthal order of the mode
+    :type m: int
+    :param r: radial position
+    :type r: float
+    :param theta: angle
+    :type theta: float
+    :return: the value of the Zernike mode corresponding to n and m, at position (r,theta).
+    :rtype: float
+    """
+
     Z = np.sqrt(n+1)*Rnm(n, m, r)*np.sqrt(2)*np.sin(m*theta)
     return Z
 
@@ -264,7 +312,15 @@ def Zodd(n, m, r, theta):
 
 
 def polar2cart(coords, size=101):
-    """conversion to be used in geometric_transform(input,mapping) as mapping"""
+    """
+    Change between polar and cartesian coordinates system
+
+    :param coords: list of array position
+    :type coords: array
+    :param size: total size of the image
+    :type size: int
+    :return: the (theta,r) values in (x,y)
+    """
 
     # origin back at the center of the image
     x = (coords[1]-size//2.)/(size//2.)
@@ -275,7 +331,7 @@ def polar2cart(coords, size=101):
     theta = np.arctan2(y, x)
     theta = theta < 0 and theta+2*np.pi or theta
 
-    # bin r,theta back to pixel space (101,101)
+    # bin r,theta back to pixel space (size,size)
     r *= size-1
     theta *= (size-1)/(2*np.pi)
     return theta, r
@@ -284,8 +340,17 @@ def polar2cart(coords, size=101):
 
 
 def jitter(PSF, jitterSize):
-    """Compute the Optical Transfer Function (OTF) and multiply it by the gaussian jitter function
-    WORK IN PROGRESS"""
+    """
+    Computes the optical transfer function (OTF) and multiply it by the gaussian jitter function
+
+    Work in progress: currently just a skeleton
+
+    :param PSF:
+    :param jitterSize:
+    :return:
+    """
+
+    """WORK IN PROGRESS"""
     jitter = 0.
     OTF = np.fft.fft2(PSF)*jitter
     OTF = np.fft.ifft2(OTF)
@@ -295,20 +360,30 @@ def jitter(PSF, jitterSize):
 
 
 def bin2detector(coords, L, size, detectorScale):
-    """re-bin the Optical Transfer Function to the detector's scale.
-    ---Used in resizePSF()---
+    """
+    re-bin the Optical Transfer Function to the detector's scale.
+
+    Currently not used, since the desired PSF has to be oversampled.
+
+    :param coords: list of (x,y) positions
+    :type coords: np.array
+    :param L: wavelength in microns
+    :type L: float
+    :param size: size of the image
+    :type size: int
+    :param detectorScale:
+    :type detectorScale: int
+    :return: the positions re-binned to detector space
+    :rtype:
+    """
+
+    """
+    Used in resizePSF()
     The OTF can be the PSF, or if jitter is specified, its convolution with a gaussian.
     """
 
     # scale the PSF to the desired size (0.106 arcsec)
     scaleFactor = 0.0797/6.*(L/0.76)  # at 5x zero-padding
-    # PSF=0.0797'' in sky space, has to be 0.106'' in detector
-    # factor of 0.106/0.0797 = 1.32998
-    # scaleFactor=0.751887*L/.76
-    # scaleFactor=0.132998*L/.76
-
-    # pixel scale taken from Tiny Tim psf.fits' header
-    # detectorScale=0.0251 # ''/pixel
 
     x = (coords[1]-size//2.)*detectorScale/scaleFactor+(size//2.)
     y = (coords[0]-size//2.)*detectorScale/scaleFactor+(size//2.)
@@ -318,7 +393,21 @@ def bin2detector(coords, L, size, detectorScale):
 
 
 def resizePSF(PSF, L=.76, size=505, scale=0.110):
-    """Resize the PSF to match pixel size and resolution of instrument (0.12'') at .76um"""
+    """
+    Resize the PSF to match pixel size and resolution of instrument (0.12'' at .76um)
+
+    :param PSF: the PSF array
+    :type PSF: np.array
+    :param L: wavelength in microns
+    :type L: float
+    :param size: size of the image
+    :type size: int
+    :param scale: detector pixel size in arcsec
+    :type scale: float
+    :return: re-binned PSF
+    :rtype: np.array
+    """
+
     print "resizing PSF to match detector pixel size of %s''/px..." % scale
     newPSF = scipy.ndimage.interpolation.geometric_transform(PSF, bin2detector, extra_arguments=(L, size, scale))
     newPSF = newPSF[size//2.-32:size//2.+32, size//2.-32:size//2.+32]
@@ -328,13 +417,20 @@ def resizePSF(PSF, L=.76, size=505, scale=0.110):
 # --------------------------------------------------
 
 
-def createFits(PSF, disto=[0, 0, 0, 0, 0, 0, 0, 0], pixelScale=0.0251, wavelength=0.76):
-    """Creates a .fits file containing the PSF image
-    with header information:
-    Created, Instrument,
-    Focus, Astigmatism (0,45), Coma (x,y), Trefoil (x,y), Spherical
-    Pixel scale and Wavelength"""
-    
+def createFits(PSF, disto=[0, 0, 0, 0, 0, 0, 0, 0], wavelength=0.76):
+    """
+    Creates a .fits file containing the PSF image with header information: Created, Instrument,
+    Focus, Astigmatism (0,45), Coma (x,y), Trefoil (x,y), Spherical, Pixel scale and Wavelength
+
+    :param PSF: PSF array to convert to .fits
+    :type PSF: np.array
+    :param disto: the optical distortion coefficients
+    :param disto: array
+    :param wavelength: wavelength in microns
+    :type wavelength: float
+    :return: None
+    """
+
     name = 'psf_%s.fits' % wavelength
     print 'Writing psf to file %s...' % name
 
@@ -354,7 +450,7 @@ def createFits(PSF, disto=[0, 0, 0, 0, 0, 0, 0, 0], pixelScale=0.0251, wavelengt
     header['X_CLOVER'] = (disto[5], 'PSF RMS X-clover (waves @ 547 nm)')
     header['Y_CLOVER'] = (disto[6], 'PSF RMS Y-clover (waves @ 547 nm)')
     header['SPHEICL'] = (disto[7], 'PSF RMS spherical (waves @ 547 nm)')
-    header['PIXSCALE'] = (round(pixelScale,4), 'Pixel scale in arcseconds')
+    header['PIXSCALE'] = ('work in progress', 'Pixel scale in arcseconds')
     header['WAVELNTH'] = (wavelength, 'PSF wavelength in microns')
 
     hdu.writeto('%s' % name, clobber=True)
@@ -372,17 +468,12 @@ def main():
     dist = [0.0026, 0.0089, 0.0222, -0.0018, 0.0113, 0., 0., 0.]
     
     PSF = psf(A, L, 5, dist)
-    size = np.shape(PSF)[0]  # size of the array
 
-    pixelScale = 0.110  # WFI pixel scale
-    # with constant pixelScale, the size of the PSF will vary with the wavelength
-    # and its sampling too.
+    pixelScale = 0.110  # of the instrument
 
-    newPSF = resizePSF(PSF, L, size, pixelScale)
-    # plt.imshow(newPSF,origin='lower',interpolation='nearest')
-    # plt.show()
+    # newPSF = resizePSF(PSF, L, size=np.shape(PSF)[0], pixelScale)  # if one wants to re-bin the PSF to detector size.
 
-    createFits(newPSF, pixelScale=pixelScale, wavelength=L, disto=dist)
+    createFits(PSF, wavelength=L, disto=dist)
     return
 
 # ==================================================
