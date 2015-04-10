@@ -155,13 +155,13 @@ def psf_compute(a, wavelength=.76, scale_factor=5, dist=[0, 0, 0, 0, 0, 0, 0, 0]
     tmp = np.fft.fftshift(tmp)  # switch quadrant to place the origin in the middle of the array
 
     print '... done'
-    PSF = np.real(np.multiply(tmp, np.conjugate(tmp)))
-    print '----------\nPSF image size: (%s,%s)' % (np.shape(PSF)[0], np.shape(PSF)[1])
+    psf = np.real(np.multiply(tmp, np.conjugate(tmp)))
+    print '----------\nPSF image size: (%s,%s)' % (np.shape(psf)[0], np.shape(psf)[1])
     print 'lambda = %s' % wavelength
     print "pixel size @ 0.76um: 0.0133''/px"
 
     print '----------\nPSF computed'
-    return PSF
+    return psf
 
 # --------------------------------------------------
 
@@ -228,7 +228,7 @@ def path_diff(size=101, wavelength=.76, dist=[0., 0., 0., 0., 0., 0., 0., 0.]):
     Zernike coefficient values are given in microns RMS of wave at 547 microns
     """
 
-    zernike_modes = [(2, 0), (2, -2), (2, 2), (3, -1), (3, 1), (3, -3), (3, 3), (4, 0)]  # defocus,z5,z6,z7,z8,z9,z10,z11
+    zernike_modes = [(2, 0), (2, -2), (2, 2), (3, -1), (3, 1), (3, -3), (3, 3), (4, 0)]  # defocus,z5,z6,..,z11
 
     rho_range = np.linspace(0, 1, size)
     theta_range = np.linspace(0, 2*np.pi, size)
@@ -276,7 +276,8 @@ def r_nm(n, m, r):
 
     r_nm_value = 0
     for s in range((n-m)/2+1):
-        r_nm_value += (((-1)**s*np.math.factorial(n-s))/(np.math.factorial(s)*np.math.factorial((n+m)/2-s)*np.math.factorial((n-m)/2-s)))*r**(n-2*s)
+        r_nm_value += (((-1)**s * np.math.factorial(n-s)) / (np.math.factorial(s) * np.math.factorial((n+m)/2-s) *
+                                                             np.math.factorial((n-m)/2-s))) * r**(n-2*s)
     return r_nm_value
 
 # --------------------------------------------------
@@ -331,7 +332,7 @@ def polar2cart(coords, size=101):
     Change between polar and cartesian coordinates system
 
     :param coords: list of array position
-    :type coords: array
+    :type coords: np.array
     :param size: total size of the image
     :type size: int
     :return: the (theta,r) values in (x,y)
@@ -441,7 +442,7 @@ def create_fits(psf, dist=[0, 0, 0, 0, 0, 0, 0, 0], wavelength=0.76):
     :param psf: PSF array to convert to .fits
     :type psf: np.array
     :param dist: the optical distortion coefficients
-    :type dist: array
+    :type dist: np.array
     :param wavelength: wavelength in microns
     :type wavelength: float
     :return: None
