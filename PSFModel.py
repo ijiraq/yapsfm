@@ -1,7 +1,10 @@
 #! /usr/bin/env python
 """
 The script can load a gray scale fits image with fits2aperture(.fits)
-or create a circular aperture using aperture(size)
+or create a circular aperture using aperture(size).
+It will then produce a PSF .fits file, optically distorted with defocus, astigmatism, coma, trefoil and spherical
+(Zernike modes 4 to 11, from Noll (1976))
+
 
 Feb 25th: PSF computed as perfect theoretical Airy Disk: OPD=0.
 
@@ -122,7 +125,28 @@ def fits2aperture(input_file):
 # --------------------------------------------------
 
 
-def psf_compute(a, wavelength=.76, scale_factor=5, dist=[0, 0, 0, 0, 0, 0, 0, 0]):
+def read_distortions(file_path):
+    """
+    Read the input file and creates an array out of the Zernike coeffs as dist=[z2,z3,z4,z5,z6,z7,z8,z9,z10,z11]
+    corresponding to tip, tilt, defocus, 0-astigmatism, 45-astigmatism, x-coma, y-coma, x-trefoil, y-trefoil, spherical.
+
+    :param file_path: the input file containing the Zernike coefficients values
+    :type file_path: str
+    :return: an array containing the distortion values, dist=[z2,z3,z4,z5,z6,z7,z8,z9,z10,z11]
+    :rtype: np.array
+    """
+    data = open(file_path).readlines()
+
+    dist = []
+    for i, line in enumerate(data):
+        dist.append(float(data[i].partition('#')[0].strip()))
+
+    return dist
+
+# --------------------------------------------------
+
+
+def psf_compute(a, wavelength=.76, scale_factor=5, dist=None):
     """
     Compute the PSF at wavelength L, using aperture A and optical distortions dist
     corresponding to Zernike modes 4 to 11 (defocus to spherical)
@@ -166,7 +190,7 @@ def psf_compute(a, wavelength=.76, scale_factor=5, dist=[0, 0, 0, 0, 0, 0, 0, 0]
 # --------------------------------------------------
 
 
-def pupil(a, wavelength=.76, dist=[0, 0, 0, 0, 0, 0, 0, 0]):
+def pupil(a, wavelength=.76, dist=None):
     """
     Compute the pupil function for aperture A, wavelength L and optical distortions dist
 
@@ -192,7 +216,7 @@ def pupil(a, wavelength=.76, dist=[0, 0, 0, 0, 0, 0, 0, 0]):
 # --------------------------------------------------
 
 
-def path_diff(size=101, wavelength=.76, dist=[0., 0., 0., 0., 0., 0., 0., 0.]):
+def path_diff(size=101, wavelength=.76, dist=None):
     """
     Computes the optical path differences at wavelength L for optical distortions dist.
 
@@ -228,7 +252,7 @@ def path_diff(size=101, wavelength=.76, dist=[0., 0., 0., 0., 0., 0., 0., 0.]):
     Zernike coefficient values are given in microns RMS of wave at 547 microns
     """
 
-    zernike_modes = [(2, 0), (2, -2), (2, 2), (3, -1), (3, 1), (3, -3), (3, 3), (4, 0)]  # defocus,z5,z6,..,z11
+    zernike_modes = [(1, 1), (1, -1), (2, 0), (2, -2), (2, 2), (3, -1), (3, 1), (3, -3), (3, 3), (4, 0)]  # z2 to z11
 
     rho_range = np.linspace(0, 1, size)
     theta_range = np.linspace(0, 2*np.pi, size)
@@ -236,7 +260,7 @@ def path_diff(size=101, wavelength=.76, dist=[0., 0., 0., 0., 0., 0., 0., 0.]):
     
     zernike_total = np.zeros((size, size))
     for i in range(len(dist)):
-        aj = dist[i]*.547/wavelength  # Zernike coefficient at wavelength in microns
+        aj = dist[i]*.547/wavelength  # Zernike coefficient at wavelength in microns, .547um is the reference wavelength
         print 'Computing Z%s with aj=%s' % (4+i, aj)
         n, m = zernike_modes[i][0], zernike_modes[i][1]
         if m < 0.:
@@ -367,17 +391,17 @@ def jitter(psf, jitter_size):
     """
 
     """WORK IN PROGRESS"""
-    jitter = 0.
-    OTF = np.fft.fft2(psf)*jitter
-    OTF = np.fft.ifft2(OTF)
-    return
+    jitter_value = jitter_size
+    otf = np.fft.fft2(psf)*jitter_value
+    otf = np.fft.ifft2(otf)
+    return otf
 
 # --------------------------------------------------
 
 
 def bin2detector(coords, wavelength, size, detector_scale):
     """
-    re-bin the Optical Transfer Function to the detector's scale.
+    re-bin the Optical Transfer Function to the detector's scale. Used in geometric_transform in resize_psf().
 
     Currently not used, since the desired PSF has to be oversampled.
 
@@ -434,7 +458,7 @@ def resize_psf(psf, wavelength=.76, size=505, scale=0.110):
 # --------------------------------------------------
 
 
-def create_fits(psf, dist=[0, 0, 0, 0, 0, 0, 0, 0], wavelength=0.76):
+def create_fits(psf, dist=None, wavelength=0.76):
     """
     Creates a .fits file containing the PSF image with header information: Created, Instrument,
     Focus, Astigmatism (0,45), Coma (x,y), Trefoil (x,y), Spherical, Pixel scale and Wavelength
@@ -455,9 +479,9 @@ def create_fits(psf, dist=[0, 0, 0, 0, 0, 0, 0, 0], wavelength=0.76):
     header = hdu.header
 
     now = dt.now()
-    header['CREATED'] = ('%s %s %s %s %s' % (dt.strftime(now, '%a'), dt.strftime(now, '%b'), dt.strftime(now, '%d'),
-                                             dt.strftime(now, '%X'), dt.strftime(now, '%Y')),
-                         'Time and date file was created')
+    created = '%a %b %d %X %Y'
+
+    header['CREATED'] = (now.strftime(created), 'Time and date file was created')
     header['INSTRUME'] = ('WFI', 'Simulated instrument')
     header['FOCUS'] = (dist[0], 'PSF RMS focus (waves @ 547 nm)')
     header['X_ASTIG'] = (dist[1], 'PSF RMS 0d astig (waves @ 547 nm)')
@@ -478,19 +502,21 @@ def create_fits(psf, dist=[0, 0, 0, 0, 0, 0, 0, 0], wavelength=0.76):
 
 
 def main():
-    wavelength = float(raw_input('Lambda? (0.76-2.00 microns) ') or .76)
+    wavelength = float(raw_input('Wavelength? (0.76-2.00 microns) ') or .76)
 
     if glob.glob('aperture.fits'):
         ap = fits2aperture('aperture.fits')
     else:
         ap = aperture(101, 'HST')
 
-    # Zernike coefficients for distortions Z4 to Z11 (defocus to spherical)
-    dist = [0.0026, 0.0089, 0.0222, -0.0018, 0.0113, 0., 0., 0.]
-    
+    if glob.glob('distortions.par'):
+        dist = read_distortions('distortions.par')  # par file containing list of Zernike coefficients
+    else:
+        dist = [0., 0., 0.0026, 0.0089, 0.0222, -0.0018, 0.0113, 0., 0., 0.]
+
     psf = psf_compute(ap, wavelength, 5, dist)
 
-    pixel_scale = 0.110  # of the instrument, in arcseconds per pixel
+    # pixel_scale = 0.110  # of the instrument, in arcseconds per pixel
 
     # newPSF = resizePSF(psf, wavelength, size=np.shape(psf)[0], pixel_scale)  # re-bin the psf to detector size.
 
