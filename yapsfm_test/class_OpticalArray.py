@@ -9,15 +9,17 @@ HST-like aperture. Furthermore, one can *reset* the aperture to circular shape, 
 from a .fits image.
 """
 
+import glob
 import numpy as np
 import pyfits
+import scipy.ndimage.interpolation
 
 
 class OpticalArray(object):
     def __init__(self, size):
         self.array_size = size
-        self.center = [size/2, size/2]
-        self.a = np.zeros((size, size))
+        self.center = [self.array_size//2., self.array_size//2.]
+        self.a = np.zeros((self.array_size, self.array_size))
         self.name = ''
 
     def save(self):
@@ -32,7 +34,7 @@ class Aperture(OpticalArray):
     """
     def __init__(self, size):
         super(Aperture, self).__init__(size)
-        self._circular()
+        self.circular()
 
     def circular(self):
         """
@@ -109,19 +111,20 @@ class Distorted(OpticalArray):
     The ancestor class of both *Pupil* and *PSF* objects.
     Based on *OpticalArray*, but have extra attributes *wavelength* and optical distortions *dist*
     """
-    def __init__(self, size, wavelength, dist):
-        super(OpticalArray, self).__init__(self, size)
+    def __init__(self, wavelength, dist):
+        super(OpticalArray, self).__init__()
         self.wavelength = wavelength
         self.dist = dist
 
 
 class Pupil(Distorted):
     def __init__(self):
-        self.wavelength = float(raw_input('wavelength? (0.76 to 2.00 microns') or .76)
-        self.dist = self._read_distortions()
+        self.wavelength = float(raw_input('wavelength? (0.76 to 2.00 microns) ') or .76)
+        self._read_distortions()
         self.array_size = 101
-        super(Distorted, self).__init__(self)
-        self._compute_pupil(101)
+        self.opd = self._path_diff()
+        super(Distorted, self).__init__(self.array_size)
+        self._compute_pupil()
         self.name = 'Pupil'
 
     def _read_distortions(self, file_path='distortions.par'):
@@ -130,7 +133,7 @@ class Pupil(Distorted):
         dist = []
         for i, line in enumerate(data):
             dist.append(float(data[i].partition('#')[0].strip()))
-        return dist
+        self.dist = dist
 
     def _compute_pupil(self):
         print 'Computing pupil...'
@@ -143,6 +146,143 @@ class Pupil(Distorted):
             aperture.make_hst_ap()
 
         pass
-        opd = path_diff(self.array_size, self.wavelength, self.dist)  # the optical path difference (OPD)
-        self.a = np.multiply(self.a, np.exp(np.divide(2j*np.pi*opd, self.wavelength)))
+        self.a = np.multiply(aperture.a, np.exp(np.divide(2j*np.pi*self.opd, self.wavelength)))
         print '... done'
+
+    def _path_diff(self):
+        zernike_modes = [(1, 1), (1, -1), (2, 0), (2, -2), (2, 2), (3, -1), (3, 1), (3, -3), (3, 3), (4, 0)]  # z2..z11
+
+        rho_range = np.linspace(0, 1, self.array_size)
+        theta_range = np.linspace(0, 2*np.pi, self.array_size)
+        rho, theta = np.meshgrid(rho_range, theta_range)
+
+        zernike_total = np.zeros((self.array_size, self.array_size))
+        for i in range(len(self.dist)):
+            aj = self.dist[i]*.547/self.wavelength  # Zernike coefficient in microns, .547um is the reference wavelength
+            print 'Computing Z%s with aj=%s' % (4+i, aj)
+            n, m = zernike_modes[i][0], zernike_modes[i][1]
+            if m < 0.:
+                zernike_value = odd_zernike(n, -m, rho, theta)
+            else:
+                zernike_value = even_zernike(n, m, rho, theta)
+            zernike_total += np.multiply(zernike_value, aj)  # OPD = Sum aj Zj
+        print 'OPD computed...'
+        opd = scipy.ndimage.interpolation.geometric_transform(zernike_total, polar2cart, extra_arguments=(
+            self.array_size,))
+        print '... and converted back to cartesian space.'
+        return opd
+
+
+def r_nm(n, m, r):
+    """
+    Computes the radial part R_n^m(r), with r a meshgrid object
+
+    :param n: radial order of the polynomial
+    :type n: int
+    :param m: azimuthal order of the polynomial
+    :type m: int
+    :param r: radial position
+    :type r: float
+    :return: radial part of the Zernike mode at position r
+    :rtype: float
+    """
+
+    r_nm_value = 0
+    for s in range((n-m)/2+1):
+        r_nm_value += (((-1)**s * np.math.factorial(n-s)) / (np.math.factorial(s) * np.math.factorial((n+m)/2-s) *
+                                                             np.math.factorial((n-m)/2-s))) * r**(n-2*s)
+    return r_nm_value
+
+
+def even_zernike(n, m, r, theta):
+    """
+    Computes the even Zernike mode following Noll (1976)
+
+    :param n: radial order of the mode
+    :type n: int
+    :param m: azimuthal order of the mode
+    :type m: int
+    :param r: radial position
+    :type r: float
+    :param theta: angle
+    :type theta: float
+    :return: the value of the Zernike mode corresponding to n and m, at position (r,theta).
+    :rtype: float
+    """
+
+    zernike_value = np.sqrt(n+1)*r_nm(n, m, r)*np.sqrt(2)*np.cos(m*theta)
+    return zernike_value
+
+
+def odd_zernike(n, m, r, theta):
+    """
+    Computes the odd Zernike mode following Noll (1976)
+
+    :param n: radial order of the mode
+    :type n: int
+    :param m: azimuthal order of the mode
+    :type m: int
+    :param r: radial position
+    :type r: float
+    :param theta: angle
+    :type theta: float
+    :return: the value of the Zernike mode corresponding to n and m, at position (r,theta).
+    :rtype: float
+    """
+
+    zernike_value = np.sqrt(n+1)*r_nm(n, m, r)*np.sqrt(2)*np.sin(m*theta)
+    return zernike_value
+
+
+def polar2cart(coords, size=101):
+    """
+    Change between polar and cartesian coordinates system
+
+    :param coords: list of array position
+    :type coords: np.array
+    :param size: total size of the image
+    :type size: int
+    :return: the (theta,r) values in (x,y)
+    """
+
+    # origin back at the center of the image
+    x = (coords[1]-size//2.)/(size//2.)
+    y = (coords[0]-size//2.)/(size//2.)
+
+    # compute -1<r<1 and 0<theta<2pi
+    r = np.sqrt(x*x+y*y)
+    theta = np.arctan2(y, x)
+    theta = theta < 0 and theta+2*np.pi or theta
+
+    # bin r,theta back to pixel space (size,size)
+    r *= size-1
+    theta *= (size-1)/(2*np.pi)
+    return theta, r
+
+
+class PSF(Distorted):
+    def __init__(self, pupil):
+        self.array_size = 505
+        super(Distorted, self).__init__(self.array_size)
+        self._compute_psf(pupil)
+        self.name = 'Psf'
+
+    def _compute_psf(self, pupil):
+        print 'Starting FFT with zero-padding factor of %s...' % (self.array_size/np.shape(pupil.a)[0])
+        tmp = np.fft.fft2(pupil.a, s=[self.array_size, self.array_size])  # padding with 0s
+        tmp = np.fft.fftshift(tmp)  # switch quadrant to place the origin in the middle of the array
+        print "... done"
+        self.a = np.real(np.multiply(tmp, np.conjugate(tmp)))
+
+
+def main():
+    aperture = Aperture(101)
+    aperture.make_hst_ap()
+
+    pupil = Pupil()
+
+    psf = PSF(pupil)
+    psf.save()
+
+if __name__ == "__main__":
+    main()
