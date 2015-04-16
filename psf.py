@@ -9,10 +9,10 @@ import pyfits  # fits file handling and creation
 from datetime import datetime as dt
 
 
-def psf_compute(a, wavelength=.76, scale_factor=5, dist=None):
+def compute_psf(a, wavelength=.76, scale_factor=5, dist=None):
     """
-    Compute the PSF at wavelength L, using aperture A and optical distortions dist
-    corresponding to Zernike modes 4 to 11 (defocus to spherical)
+    Compute the PSF at *wavelength*, using aperture *a* and optical distortions *dist*
+    corresponding to Zernike modes 2 to 11 (tip to spherical)
 
     :param a: aperture array of 0s and 1s
     :type a: np.array
@@ -36,17 +36,16 @@ def psf_compute(a, wavelength=.76, scale_factor=5, dist=None):
     pup = pupil(a, wavelength, dist)
     size = np.shape(pup)
     scaled = [size[i]*scale_factor for i in range(len(size))]
+
     print 'Starting FFT with zero-padding factor of %s...' % scale_factor
     tmp = np.fft.fft2(pup, s=[scaled[0], scaled[1]])  # padding with 0s
-
     tmp = np.fft.fftshift(tmp)  # switch quadrant to place the origin in the middle of the array
-
     print '... done'
+
     psf = np.real(np.multiply(tmp, np.conjugate(tmp)))
     print '----------\nPSF image size: (%s,%s)' % (np.shape(psf)[0], np.shape(psf)[1])
     print 'lambda = %s' % wavelength
     print "pixel size @ 0.76um: 0.0133''/px"
-
     print '----------\nPSF computed'
     return psf
 
@@ -55,7 +54,7 @@ def psf_compute(a, wavelength=.76, scale_factor=5, dist=None):
 
 def pupil(a, wavelength=.76, dist=None):
     """
-    Compute the pupil function for aperture A, wavelength L and optical distortions dist
+    Compute the pupil function for aperture *a*, *wavelength* and optical distortions *dist*
 
     :param a: aperture function
     :type a: np.array
@@ -81,7 +80,7 @@ def pupil(a, wavelength=.76, dist=None):
 
 def path_diff(size=101, wavelength=.76, dist=None):
     """
-    Computes the optical path differences at wavelength L for optical distortions dist.
+    Computes the optical path differences at *wavelength* for optical distortions *dist*.
 
     :param size: the array size on which to compute the OPD
     :type size: int
@@ -242,25 +241,30 @@ def polar2cart(coords, size=101):
 # --------------------------------------------------
 
 
-def jitter(psf, jitter_size):
+def jitter(psf, jitter_size=0.003):
     """
     Computes the optical transfer function (OTF) and multiply it by the gaussian jitter function.
 
-    a gaussian f(x) = a exp( (x-mu)^2/(2 sigma^2)
+    a gaussian f(x) = 1/(sigma*sqrt(2pi)) exp( (x-mu)^2/(2 sigma^2)
+    on HST, sigma is about 3 mas
 
     Work in progress: currently just a skeleton
 
-    :param psf:
+    :param psf: an array describing the psf
     :type psf: np.array
     :param jitter_size: the jitter size in arcseconds
     :type jitter_size: float
     :return:
     """
 
-    """WORK IN PROGRESS"""
+    """WORK IN PROGRESS
+    Have to map the jitter_function onto an array to create the gaussian shape"""
+    jitter_array = np.zeros((psf.shape[0], psf.shape[1]))
+    x = np.zeros((3, 3))
+    normalisation = 1./(jitter_size*np.sqrt(2.*np.pi))
+    jitter_function = normalisation*np.exp(x / (2.*jitter_size**2))
 
-    jitter_value = np.exp(1./2.*jitter_size**2)
-    otf = np.fft.fft2(psf)*jitter_value
+    otf = np.fft.fft2(psf)*jitter_array
     otf = np.fft.ifft2(otf)
     return otf
 

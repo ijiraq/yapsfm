@@ -43,7 +43,7 @@ def main():
     else:
         dist = [0., 0., 0.0026, 0.0089, 0.0222, -0.0018, 0.0113, 0., 0., 0.]
 
-    psf = point_spread_function.psf_compute(ap, wavelength, 5, dist)
+    psf = point_spread_function.compute_psf(ap, wavelength, 5, dist)
 
     # pixel_scale = 0.110  # of the instrument, in arcseconds per pixel
 
