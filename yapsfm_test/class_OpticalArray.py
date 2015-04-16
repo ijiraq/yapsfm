@@ -118,8 +118,9 @@ class Distorted(OpticalArray):
 
 
 class Pupil(Distorted):
-    def __init__(self):
-        self.wavelength = float(raw_input('wavelength? (0.76 to 2.00 microns) ') or .76)
+    def __init__(self, wavelength):
+        # self.wavelength = float(raw_input('wavelength? (0.76 to 2.00 microns) ') or .76)
+        self.wavelength = wavelength
         self._read_distortions()
         self.array_size = 101
         self.opd = self._path_diff()
@@ -276,13 +277,11 @@ class PSF(Distorted):
 
 
 def main():
-    aperture = Aperture(101)
-    aperture.make_hst_ap()
-
-    pupil = Pupil()
+    wavelength = float(raw_input('wavelength? (0.76 to 2.00 microns) ') or .76)
+    pupil = Pupil(wavelength)
 
     psf = PSF(pupil)
-    psf.save()
+    psf.save()  # does not fill the header of the .fits image
 
 if __name__ == "__main__":
     main()

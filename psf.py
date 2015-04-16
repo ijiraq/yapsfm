@@ -327,7 +327,7 @@ def bin2detector(coords, wavelength, size, detector_scale):
 
 def resize_psf(psf, wavelength=.76, size=505, scale=0.110):
     """
-    Resize the PSF to match pixel size and resolution of instrument (0.12'' at .76um)
+    Resize the PSF to match pixel size and resolution of instrument
 
     :param psf: the PSF array
     :type psf: np.array
