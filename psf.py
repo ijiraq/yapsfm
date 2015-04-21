@@ -215,7 +215,7 @@ def odd_zernike(n, m, r, theta):
 
 def polar2cart(coords, size=101):
     """
-    Change between polar and cartesian coordinates system
+    Change between polar and cartesian coordinates system, used in path_diff() in geometric_transform
 
     :param coords: list of array position
     :type coords: np.array
@@ -269,6 +269,17 @@ def jitter(psf, jitter_size=0.003):
     return otf
 
 # --------------------------------------------------
+
+
+def charge_diffusion(psf):
+    """
+    Tiny Tim uses a 3x3 matrix to model the diffusion of charges, and -for the IR detector- the intra-pixel capacitance
+    We use the same matrix as used for WFC3's IR channel, as a starting point.
+    :return:
+    """
+    charge_diff = np.array([[0.002, 0.038, 0.002], [0.038, 0.840, 0.038], [0.002, 0.038, 0.002]])
+
+    return
 
 
 def read_distortions(file_path):

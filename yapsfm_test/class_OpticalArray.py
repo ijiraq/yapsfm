@@ -16,16 +16,56 @@ import scipy.ndimage.interpolation
 
 
 class OpticalArray(object):
-    def __init__(self, size):
+    def __init__(self, size, polar=False):
         self.array_size = size
         self.center = [self.array_size//2., self.array_size//2.]
-        self.a = np.zeros((self.array_size, self.array_size))
         self.name = ''
+        self._a = None
+        self._polar = polar
 
     def save(self):
         hdu = pyfits.PrimaryHDU(self.a)
         hdu.writeto('%s.fits' % self.name, clobber=True)
         print 'saving %s' % self.name
+
+    @property
+    def a(self):
+        if self._a is not None:
+            return self._a
+        self._a = np.zeros((self.array_size, self.array_size))
+        return
+
+    @a.setter
+    def a(self, a):
+        self._a = a
+
+    def polar2cart(self):
+        """
+        Change between polar and cartesian coordinates system
+
+        :return: the (theta,r) values in (x,y)
+        """
+        if not self._polar:
+            return
+        size = self.array_size
+
+        def func(coords):
+
+            # origin back at the center of the image
+            x = (coords[1]-size//2.)/(size//2.)
+            y = (coords[0]-size//2.)/(size//2.)
+
+            # compute -1<r<1 and 0<theta<2pi
+            r = np.sqrt(x*x+y*y)
+            theta = np.arctan2(y, x)
+            theta = theta < 0 and theta+2*np.pi or theta
+
+            # bin r,theta back to pixel space (size,size)
+            r *= size-1
+            theta *= (size-1)/(2*np.pi)
+            return theta, r
+        self.a = scipy.ndimage.interpolation.geometric_transform(self.a, func)
+        self._polar = False
 
 
 class Aperture(OpticalArray):
@@ -111,30 +151,27 @@ class Distorted(OpticalArray):
     The ancestor class of both *Pupil* and *PSF* objects.
     Based on *OpticalArray*, but have extra attributes *wavelength* and optical distortions *dist*
     """
-    def __init__(self, wavelength, dist):
-        super(OpticalArray, self).__init__()
+    def __init__(self, size, wavelength, dist):
+        super(Distorted, self).__init__(size)
         self.wavelength = wavelength
         self.dist = dist
 
 
 class Pupil(Distorted):
-    def __init__(self, wavelength):
-        # self.wavelength = float(raw_input('wavelength? (0.76 to 2.00 microns) ') or .76)
-        self.wavelength = wavelength
-        self._read_distortions()
-        self.array_size = 101
+    def __init__(self, wavelength, array_size=101):
+        super(Pupil, self).__init__(array_size, wavelength, self.dist)
         self.opd = self._path_diff()
-        super(Distorted, self).__init__(self.array_size)
         self._compute_pupil()
         self.name = 'Pupil'
 
-    def _read_distortions(self, file_path='distortions.par'):
+    @property
+    def dist(self, file_path='distortions.par'):
         data = open(file_path).readlines()
 
         dist = []
-        for i, line in enumerate(data):
+        for i in range(len(data)):
             dist.append(float(data[i].partition('#')[0].strip()))
-        self.dist = dist
+        return dist
 
     def _compute_pupil(self):
         print 'Computing pupil...'
@@ -157,21 +194,23 @@ class Pupil(Distorted):
         theta_range = np.linspace(0, 2*np.pi, self.array_size)
         rho, theta = np.meshgrid(rho_range, theta_range)
 
-        zernike_total = np.zeros((self.array_size, self.array_size))
+        # zernike_total = np.zeros((self.array_size, self.array_size))
+        zernike_total = OpticalArray(polar=True, size=self.array_size)
         for i in range(len(self.dist)):
-            aj = self.dist[i]*.547/self.wavelength  # Zernike coefficient in microns, .547um is the reference wavelength
+            aj = self.dist[i]/.547*self.wavelength  # Zernike coefficient in microns, .547um is the reference wavelength
             print 'Computing Z%s with aj=%s' % (4+i, aj)
             n, m = zernike_modes[i][0], zernike_modes[i][1]
             if m < 0.:
                 zernike_value = odd_zernike(n, -m, rho, theta)
             else:
                 zernike_value = even_zernike(n, m, rho, theta)
-            zernike_total += np.multiply(zernike_value, aj)  # OPD = Sum aj Zj
+            zernike_total.a += np.multiply(zernike_value, aj)  # OPD = Sum aj Zj
         print 'OPD computed...'
-        opd = scipy.ndimage.interpolation.geometric_transform(zernike_total, polar2cart, extra_arguments=(
-            self.array_size,))
+        """opd = scipy.ndimage.interpolation.geometric_transform(zernike_total, polar2cart, extra_arguments=(
+            self.array_size,))"""
         print '... and converted back to cartesian space.'
-        return opd
+        zernike_total.polar2cart()
+        return zernike_total.a
 
 
 def r_nm(n, m, r):
@@ -235,45 +274,24 @@ def odd_zernike(n, m, r, theta):
     return zernike_value
 
 
-def polar2cart(coords, size=101):
-    """
-    Change between polar and cartesian coordinates system
-
-    :param coords: list of array position
-    :type coords: np.array
-    :param size: total size of the image
-    :type size: int
-    :return: the (theta,r) values in (x,y)
-    """
-
-    # origin back at the center of the image
-    x = (coords[1]-size//2.)/(size//2.)
-    y = (coords[0]-size//2.)/(size//2.)
-
-    # compute -1<r<1 and 0<theta<2pi
-    r = np.sqrt(x*x+y*y)
-    theta = np.arctan2(y, x)
-    theta = theta < 0 and theta+2*np.pi or theta
-
-    # bin r,theta back to pixel space (size,size)
-    r *= size-1
-    theta *= (size-1)/(2*np.pi)
-    return theta, r
-
-
 class PSF(Distorted):
     def __init__(self, pupil):
         self.array_size = 505
+        self.pupil = pupil
+        self._a = None
         super(Distorted, self).__init__(self.array_size)
-        self._compute_psf(pupil)
         self.name = 'Psf'
 
-    def _compute_psf(self, pupil):
-        print 'Starting FFT with zero-padding factor of %s...' % (self.array_size/np.shape(pupil.a)[0])
-        tmp = np.fft.fft2(pupil.a, s=[self.array_size, self.array_size])  # padding with 0s
+    @property
+    def a(self):
+        if self._a is not None:
+            return self._a
+        # print 'Starting FFT with zero-padding factor of %s...' % (self.array_size/np.shape(pupil.a)[0])
+        tmp = np.fft.fft2(self.pupil.a, s=[self.array_size, self.array_size])  # padding with 0s
         tmp = np.fft.fftshift(tmp)  # switch quadrant to place the origin in the middle of the array
         print "... done"
-        self.a = np.real(np.multiply(tmp, np.conjugate(tmp)))
+        self._a = np.real(np.multiply(tmp, np.conjugate(tmp)))
+        return self._a
 
 
 def main():
@@ -281,7 +299,7 @@ def main():
     pupil = Pupil(wavelength)
 
     psf = PSF(pupil)
-    psf.save()  # does not fill the header of the .fits image
+    psf.save()  # does not fill the header of the .fits image (yet)
 
 if __name__ == "__main__":
     main()
