@@ -33,7 +33,7 @@ class OpticalArray(object):
         if self._a is not None:
             return self._a
         self._a = np.zeros((self.array_size, self.array_size))
-        return
+        return self._a
 
     @a.setter
     def a(self, a):
@@ -151,27 +151,29 @@ class Distorted(OpticalArray):
     The ancestor class of both *Pupil* and *PSF* objects.
     Based on *OpticalArray*, but have extra attributes *wavelength* and optical distortions *dist*
     """
-    def __init__(self, size, wavelength, dist):
+    def __init__(self, size, wavelength):
         super(Distorted, self).__init__(size)
         self.wavelength = wavelength
-        self.dist = dist
+        self._dist = None
+
+    @property
+    def dist(self, file_path='distortions.par'):
+        if self._dist is not None:
+            return self._dist
+        data = open(file_path).readlines()
+
+        self._dist = []
+        for i in range(len(data)):
+            self._dist.append(float(data[i].partition('#')[0].strip()))
+        return self._dist
 
 
 class Pupil(Distorted):
     def __init__(self, wavelength, array_size=101):
-        super(Pupil, self).__init__(array_size, wavelength, self.dist)
+        super(Pupil, self).__init__(array_size, wavelength)
         self.opd = self._path_diff()
         self._compute_pupil()
         self.name = 'Pupil'
-
-    @property
-    def dist(self, file_path='distortions.par'):
-        data = open(file_path).readlines()
-
-        dist = []
-        for i in range(len(data)):
-            dist.append(float(data[i].partition('#')[0].strip()))
-        return dist
 
     def _compute_pupil(self):
         print 'Computing pupil...'
@@ -194,11 +196,10 @@ class Pupil(Distorted):
         theta_range = np.linspace(0, 2*np.pi, self.array_size)
         rho, theta = np.meshgrid(rho_range, theta_range)
 
-        # zernike_total = np.zeros((self.array_size, self.array_size))
         zernike_total = OpticalArray(polar=True, size=self.array_size)
         for i in range(len(self.dist)):
             aj = self.dist[i]/.547*self.wavelength  # Zernike coefficient in microns, .547um is the reference wavelength
-            print 'Computing Z%s with aj=%s' % (4+i, aj)
+            print 'Computing Z%s with aj=%s' % (2+i, aj)
             n, m = zernike_modes[i][0], zernike_modes[i][1]
             if m < 0.:
                 zernike_value = odd_zernike(n, -m, rho, theta)
@@ -206,10 +207,9 @@ class Pupil(Distorted):
                 zernike_value = even_zernike(n, m, rho, theta)
             zernike_total.a += np.multiply(zernike_value, aj)  # OPD = Sum aj Zj
         print 'OPD computed...'
-        """opd = scipy.ndimage.interpolation.geometric_transform(zernike_total, polar2cart, extra_arguments=(
-            self.array_size,))"""
-        print '... and converted back to cartesian space.'
         zernike_total.polar2cart()
+        print '... and converted back to cartesian space.'
+
         return zernike_total.a
 
 
@@ -293,12 +293,30 @@ class PSF(Distorted):
         self._a = np.real(np.multiply(tmp, np.conjugate(tmp)))
         return self._a
 
+    def resize_psf(self, wavelength=.76, size=505, scale=0.110):
+        print "resizing PSF to match detector pixel size of %s''/px..." % scale
+        new_psf = scipy.ndimage.interpolation.geometric_transform(self._a, rebin, extra_arguments=(
+            wavelength, size, scale))
+        # new_psf = new_psf[size//2.-32:size//2.+32, size//2.-32:size//2.+32]
+        print '... done'
+        self._a = new_psf
+
+
+def rebin(coords, wavelength, size, detector_scale):
+    # scale the PSF to the desired size (detector_scale, in ''/pixel)
+    scale_factor = 0.0797/6.*(wavelength/0.76)  # at 5x zero-padding
+
+    x = (coords[1]-size//2.)*detector_scale/scale_factor+(size//2.)
+    y = (coords[0]-size//2.)*detector_scale/scale_factor+(size//2.)
+    return y, x
+
 
 def main():
     wavelength = float(raw_input('wavelength? (0.76 to 2.00 microns) ') or .76)
     pupil = Pupil(wavelength)
 
     psf = PSF(pupil)
+    psf.resize_psf(wavelength=wavelength, size=np.shape(psf.a)[0], scale=0.01)
     psf.save()  # does not fill the header of the .fits image (yet)
 
 if __name__ == "__main__":

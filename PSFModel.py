@@ -28,6 +28,7 @@ Apr 10th: Aperture creation in .fits file and .fits aperture input handling adde
 import glob
 import aperture
 import psf as point_spread_function
+import numpy as np
 
 
 def main():
@@ -45,11 +46,12 @@ def main():
 
     psf = point_spread_function.compute_psf(ap, wavelength, 5, dist)
 
-    # pixel_scale = 0.110  # of the instrument, in arcseconds per pixel
+    pixel_scale = 0.110  # of the instrument, in arcseconds per pixel
 
-    # newPSF = resizePSF(psf, wavelength, size=np.shape(psf)[0], pixel_scale)  # re-bin the psf to detector size.
+    newPSF = point_spread_function.resize_psf(psf, wavelength, size=np.shape(psf)[0], scale=pixel_scale)
 
-    point_spread_function.create_fits(psf, wavelength=wavelength, dist=dist)
+    # point_spread_function.create_fits(psf, wavelength=wavelength, dist=dist)
+    point_spread_function.create_fits(newPSF, wavelength=wavelength, dist=dist)
     return
 
 # ==================================================

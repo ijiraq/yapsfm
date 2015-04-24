@@ -303,7 +303,7 @@ def read_distortions(file_path):
 # --------------------------------------------------
 
 
-def bin2detector(coords, wavelength, size, detector_scale):
+def rebin(coords, wavelength, size, detector_scale):
     """
     re-bin the Optical Transfer Function to the detector's scale. Used in geometric_transform in resize_psf().
 
@@ -354,8 +354,8 @@ def resize_psf(psf, wavelength=.76, size=505, scale=0.110):
 
     print "resizing PSF to match detector pixel size of %s''/px..." % scale
     new_psf = scipy.ndimage.interpolation.geometric_transform(
-        psf, bin2detector, extra_arguments=(wavelength, size, scale))
-    new_psf = new_psf[size//2.-32:size//2.+32, size//2.-32:size//2.+32]
+        psf, rebin, extra_arguments=(wavelength, size, scale))
+    # new_psf = new_psf[size//2.-32:size//2.+32, size//2.-32:size//2.+32]
     print '... done'
     return new_psf
 
