@@ -1,12 +1,21 @@
 #! /usr/bin/env python
 """
-The common ancestor class between aperture, pupil and the PSF object is OpticalArray: a ImageHDU object with
-properties *array_size*, *center*, *a* and *name*.
-One can save the OpticalArray instance in a fits format using *save*.
+The common ancestor class between aperture, pupil and the PSF object is OpticalArray: an object with
+properties *array_size*, *center*, *name*, *_a* and *_polar*.
+One can save the OpticalArray instance in a fits format using *save* or change it from polar coordinate system to
+cartesian using *polar2cart*.
 
 Aperture inherits from OpticalArray and has methods *circular* to make a circular aperture or *make_hst_ap* to make an
 HST-like aperture. Furthermore, one can *reset* the aperture to circular shape, or *fits2aperture* to load an aperture
 from a .fits image.
+
+Distorted inherits from OpticalArray and has properties *wavelength* and *_dist*, corresponding to the optical
+distortion affecting the psf.
+
+Pupil inherits from Distorted and has properties *opd* and *name*. Its methods are *_compute_pupil*, *_path_diff*
+
+PSF inherits from Distorted and has properties *array_size*, *pupil*, *_a* and *name*. Its method is *rezie_psf* to
+a desired resolution.
 """
 
 import glob
@@ -16,6 +25,10 @@ import scipy.ndimage.interpolation
 
 
 class OpticalArray(object):
+    """
+    The ancestor class, it has the basic properties *array_size*, *center*, *name*, the data array *_a*, and a polar
+    coordinates trigger *_polar*, allowing to switch between polar and cartesian coordinate systems.
+    """
     def __init__(self, size, polar=False):
         self.array_size = size
         self.center = [self.array_size//2., self.array_size//2.]
@@ -149,7 +162,7 @@ class Aperture(OpticalArray):
 class Distorted(OpticalArray):
     """
     The ancestor class of both *Pupil* and *PSF* objects.
-    Based on *OpticalArray*, but have extra attributes *wavelength* and optical distortions *dist*
+    Inherits from *OpticalArray*, but have extra attributes *wavelength* and optical distortions *dist*
     """
     def __init__(self, size, wavelength):
         super(Distorted, self).__init__(size)
@@ -169,6 +182,10 @@ class Distorted(OpticalArray):
 
 
 class Pupil(Distorted):
+    """
+    Pupil inherits from Distorted, it has properties *opd* (the optical path differences) and *name*.
+    It can be computed using *_compute_pupil* which will compute the *_path_diff* of the wavefront.
+    """
     def __init__(self, wavelength, array_size=101):
         super(Pupil, self).__init__(array_size, wavelength)
         self.opd = self._path_diff()
@@ -275,6 +292,10 @@ def odd_zernike(n, m, r, theta):
 
 
 class PSF(Distorted):
+    """
+    PSF inherits from Distorted and has properties *array_size*, *pupil*, *_a* the array containing the data, and
+    *name*. Its resolution can be modified using *resize_psf*, which will change the pixel resolution to *scale*.
+    """
     def __init__(self, pupil):
         self.array_size = 505
         self.pupil = pupil
@@ -294,7 +315,7 @@ class PSF(Distorted):
         return self._a
 
     def resize_psf(self, wavelength=.76, size=505, scale=0.110):
-        print "resizing PSF to match detector pixel size of %s''/px..." % scale
+        print "resizing PSF to match pixel resolution of %s''/px..." % scale
         new_psf = scipy.ndimage.interpolation.geometric_transform(self._a, rebin, extra_arguments=(
             wavelength, size, scale))
         # new_psf = new_psf[size//2.-32:size//2.+32, size//2.-32:size//2.+32]
@@ -303,7 +324,16 @@ class PSF(Distorted):
 
 
 def rebin(coords, wavelength, size, detector_scale):
-    # scale the PSF to the desired size (detector_scale, in ''/pixel)
+    """
+    Scale the PSF to the desired size (detector_scale, in ''/pixel)
+    This function is called by *resize_psf* in geometric_transform.
+
+    :param coords: list of array coordinates
+    :param wavelength: the wavelength at which the PSF is computed at
+    :param size: size of the array
+    :param detector_scale: the pixel resolution at which to rebin the PSF
+    :return: new coordinates (python starts with y)
+    """
     scale_factor = 0.0797/6.*(wavelength/0.76)  # at 5x zero-padding
 
     x = (coords[1]-size//2.)*detector_scale/scale_factor+(size//2.)
@@ -313,10 +343,11 @@ def rebin(coords, wavelength, size, detector_scale):
 
 def main():
     wavelength = float(raw_input('wavelength? (0.76 to 2.00 microns) ') or .76)
+    scale = float(raw_input('final pixel scale in ''/pixel? (0.01) ') or 0.01)
     pupil = Pupil(wavelength)
 
     psf = PSF(pupil)
-    psf.resize_psf(wavelength=wavelength, size=np.shape(psf.a)[0], scale=0.01)
+    psf.resize_psf(wavelength=wavelength, size=np.shape(psf.a)[0], scale=scale)
     psf.save()  # does not fill the header of the .fits image (yet)
 
 if __name__ == "__main__":
