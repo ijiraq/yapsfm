@@ -6,6 +6,7 @@ a desired resolution.
 
 import numpy as np
 import scipy.ndimage.interpolation
+
 from Distorted import Distorted
 
 
@@ -18,7 +19,7 @@ class PSF(Distorted):
         self.array_size = 505
         self.pupil = pupil
         self._a = None
-        super(Distorted, self).__init__(self.array_size)
+        super(Distorted, self).__init__(self.array_size, pupil.wavelength)
         self.name = 'Psf'
 
     @property

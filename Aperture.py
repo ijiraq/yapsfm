@@ -7,6 +7,7 @@ from a .fits image.
 
 import numpy as np
 import pyfits
+
 from OpticalArray import OpticalArray
 
 

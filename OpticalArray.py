@@ -9,6 +9,7 @@ cartesian using *polar2cart*.
 import pyfits
 import numpy as np
 import scipy.ndimage.interpolation
+from datetime import datetime as dt
 
 
 class OpticalArray(object):
@@ -25,6 +26,28 @@ class OpticalArray(object):
 
     def save(self):
         hdu = pyfits.PrimaryHDU(self.a)
+        header = hdu.header
+        now = dt.now()
+        created = '%a %b %d %X %Y'
+        header['CREATED'] = (now.strftime(created), 'Time and date file was created')
+
+        """
+        if dist:
+            now = dt.now()
+            created = '%a %b %d %X %Y'
+            header['CREATED'] = (now.strftime(created), 'Time and date file was created')
+            header['INSTRUME'] = ('WFI', 'Simulated instrument')
+            header['FOCUS'] = (dist[0], 'PSF RMS focus (waves @ 547 nm)')
+            header['X_ASTIG'] = (dist[1], 'PSF RMS 0d astig (waves @ 547 nm)')
+            header['Y_ASTIG'] = (dist[2], 'PSF RMS 45d astig (waves @ 547 nm)')
+            header['X_COMA'] = (dist[3], 'PSF RMS X-coma (waves @ 547 nm)')
+            header['Y_COMA'] = (dist[4], 'PSF RMS Y-coma (waves @ 547 nm)')
+            header['X_CLOVER'] = (dist[5], 'PSF RMS X-clover (waves @ 547 nm)')
+            header['Y_CLOVER'] = (dist[6], 'PSF RMS Y-clover (waves @ 547 nm)')
+            header['SPHEICL'] = (dist[7], 'PSF RMS spherical (waves @ 547 nm)')
+            header['PIXSCALE'] = ('work in progress', 'Pixel scale in arcseconds')
+            header['WAVELNTH'] = (wavelength, 'PSF wavelength in microns')
+        """
         hdu.writeto('%s.fits' % self.name, clobber=True)
         print 'saving %s' % self.name
 
