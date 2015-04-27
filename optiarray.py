@@ -27,9 +27,9 @@ class OpticalArray(object):
     def save(self):
         hdu = pyfits.PrimaryHDU(self.a)
         header = hdu.header
-        now = dt.now()
-        created = '%a %b %d %X %Y'
-        header['CREATED'] = (now.strftime(created), 'Time and date file was created')
+        now = dt.utcnow()
+        created = "%Y-%m-%dT%H:%M:%S"
+        header['DATE'] = (now.strftime(created), 'UTC time and date file was created')
 
         """
         if dist:
