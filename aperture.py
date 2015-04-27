@@ -8,7 +8,7 @@ from a .fits image.
 import numpy as np
 import pyfits
 
-from OpticalArray import OpticalArray
+from optiarray import OpticalArray
 
 
 class Aperture(OpticalArray):

@@ -7,7 +7,7 @@ a desired resolution.
 import numpy as np
 import scipy.ndimage.interpolation
 
-from Distorted import Distorted
+from distorted import Distorted
 
 
 class PSF(Distorted):

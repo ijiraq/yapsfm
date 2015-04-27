@@ -7,13 +7,13 @@ It then computes an on-axis PSF model using the file distortions.par as source o
 
 import numpy as np
 
-from Pupil import Pupil
-from PSF import PSF
+from pupil import Pupil
+from psf import PSF
 
 
 def main():
     wavelength = float(raw_input('wavelength? (0.76 to 2.00 microns) ') or .76)
-    scale = float(raw_input('final pixel scale in ''/pixel? (0.01) ') or 0.01)
+    scale = float(raw_input("final pixel scale in ''/pixel? (0.01) ") or 0.01)
     pupil = Pupil(wavelength)
 
     psf = PSF(pupil)

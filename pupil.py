@@ -6,9 +6,9 @@ Pupil inherits from Distorted and has properties *opd* and *name*. Its methods a
 import glob
 import numpy as np
 
-from Distorted import Distorted
-from Aperture import Aperture
-from OpticalArray import OpticalArray
+from distorted import Distorted
+from aperture import Aperture
+from optiarray import OpticalArray
 import zernike as ze
 
 

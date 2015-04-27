@@ -2,9 +2,9 @@ import unittest
 
 import glob
 import numpy as np
-from PSFModel import aperture
-from PSFModel import odd_zernike
-from PSFModel import fits2aperture
+from psf_model import aperture
+from psf_model import odd_zernike
+from psf_model import fits2aperture
 
 class PSFModelTest(unittest.TestCase):
 

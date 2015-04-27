@@ -4,7 +4,7 @@ Distorted inherits from OpticalArray and has properties *wavelength* and *_dist*
 distortion affecting the psf.
 """
 
-from OpticalArray import OpticalArray
+from optiarray import OpticalArray
 
 
 class Distorted(OpticalArray):
