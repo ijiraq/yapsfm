@@ -7,8 +7,7 @@ It then computes an on-axis PSF model using the file distortions.par as source o
 
 import numpy as np
 
-from pupil import Pupil
-from psf import PSF
+from modules import Pupil, PSF
 
 
 def main():
