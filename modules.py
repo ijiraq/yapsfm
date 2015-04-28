@@ -9,9 +9,9 @@ Aperture inherits from OpticalArray and has methods *circular* to make a circula
 HST-like aperture. Furthermore, one can *reset* the aperture to circular shape, or *fits2aperture* to load an aperture
 from a .fits image.
 
-Pupil inherits from Distorted and has properties *opd* and *name*. Its methods are *_compute_pupil*, *_path_diff*
+Pupil inherits from OpticalArray and has properties *opd* and *name*. Its methods are *_compute_pupil*, *_path_diff*
 
-PSF inherits from Distorted and has properties *array_size*, *pupil*, *_a* and *name*. Its method is *rezie_psf* to
+PSF inherits from OpticalArray and has properties *array_size*, *pupil*, *_a* and *name*. Its method is *rezie_psf* to
 a desired resolution.
 """
 
@@ -28,7 +28,7 @@ class OpticalArray(object):
     The ancestor class, it has the basic properties *array_size*, *center*, *name*, the data array *_a*, and a polar
     coordinates trigger *_polar*, allowing to switch between polar and cartesian coordinate systems.
     """
-    def __init__(self, size, polar=False):
+    def __init__(self, size, polar=False, scale=None):
         self.array_size = size
         self.center = [self.array_size//2., self.array_size//2.]
         self.name = ''
@@ -36,6 +36,7 @@ class OpticalArray(object):
         self._polar = polar
         self.wavelength = None
         self._dist = None
+        self.scale = scale
 
     @property
     def dist(self, file_path='distortions.par'):
@@ -53,23 +54,21 @@ class OpticalArray(object):
         header = hdu.header
         now = dt.utcnow()
         created = "%Y-%m-%dT%H:%M:%S"
-        header['DATE'] = (now.strftime(created), 'UTC time and date file was created')
+        header['DATE'] = (now.strftime(created), 'Date and UTC time file was created')
 
-        """
-        # Work in progress
-        if dist:
-            header['INSTRUME'] = ('WFI', 'Simulated instrument')
-            header['FOCUS'] = (dist[0], 'PSF RMS focus (waves @ 547 nm)')
-            header['X_ASTIG'] = (dist[1], 'PSF RMS 0d astig (waves @ 547 nm)')
-            header['Y_ASTIG'] = (dist[2], 'PSF RMS 45d astig (waves @ 547 nm)')
-            header['X_COMA'] = (dist[3], 'PSF RMS X-coma (waves @ 547 nm)')
-            header['Y_COMA'] = (dist[4], 'PSF RMS Y-coma (waves @ 547 nm)')
-            header['X_CLOVER'] = (dist[5], 'PSF RMS X-clover (waves @ 547 nm)')
-            header['Y_CLOVER'] = (dist[6], 'PSF RMS Y-clover (waves @ 547 nm)')
-            header['SPHEICL'] = (dist[7], 'PSF RMS spherical (waves @ 547 nm)')
-            header['PIXSCALE'] = ('work in progress', 'Pixel scale in arcseconds')
-            header['WAVELNTH'] = (wavelength, 'PSF wavelength in microns')
-        """
+        if self._dist:
+            header['INSTRUME'] = ('work in progress', 'Simulated instrument')
+            header['FOCUS'] = (self._dist[2], 'PSF RMS focus (waves @ 547 nm)')
+            header['X_ASTIG'] = (self._dist[3], 'PSF RMS 0d astig (waves @ 547 nm)')
+            header['Y_ASTIG'] = (self._dist[4], 'PSF RMS 45d astig (waves @ 547 nm)')
+            header['X_COMA'] = (self._dist[5], 'PSF RMS X-coma (waves @ 547 nm)')
+            header['Y_COMA'] = (self._dist[6], 'PSF RMS Y-coma (waves @ 547 nm)')
+            header['X_CLOVER'] = (self._dist[7], 'PSF RMS X-clover (waves @ 547 nm)')
+            header['Y_CLOVER'] = (self._dist[8], 'PSF RMS Y-clover (waves @ 547 nm)')
+            header['SPHERICL'] = (self._dist[9], 'PSF RMS spherical (waves @ 547 nm)')
+            header['PIXSCALE'] = (self.scale, 'Pixel scale in arcseconds')
+            header['WAVELNTH'] = (self.wavelength, 'PSF wavelength in microns')
+
         hdu.writeto('%s.fits' % self.name, clobber=True)
         print 'saving %s' % self.name
 
@@ -193,8 +192,8 @@ class Aperture(OpticalArray):
 
 class Pupil(OpticalArray):
     """
-    Pupil inherits from Distorted, it has properties *opd* (the optical path differences) and *name*.
-    It can be computed using *_compute_pupil* which will compute the *_path_diff* of the wavefront.
+    Pupil inherits from OpticalArray, it has properties *opd* (the optical path differences) and *name*.
+    It can be computed using *_compute_pupil* which uses the opd, or *_path_diff* of the wavefront.
     """
     def __init__(self, wavelength, array_size=101):
         super(Pupil, self).__init__(array_size)
@@ -246,12 +245,15 @@ class PSF(OpticalArray):
     PSF inherits from Distorted and has properties *array_size*, *pupil*, *_a* the array containing the data, and
     *name*. Its resolution can be modified using *resize_psf*, which will change the pixel resolution to *scale*.
     """
-    def __init__(self, pupil):
+    def __init__(self, pupil, scale):
         self.array_size = 505
         self.pupil = pupil
         self._a = None
-        super(PSF, self).__init__(self.array_size, pupil.wavelength)
+        super(PSF, self).__init__(self.array_size, pupil.wavelength, scale)
         self.name = 'Psf'
+        self._dist = pupil.dist
+        self.wavelength = pupil.wavelength
+        self.scale = scale
 
     @property
     def a(self):

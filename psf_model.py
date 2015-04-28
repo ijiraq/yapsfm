@@ -15,7 +15,7 @@ def main():
     scale = float(raw_input("final pixel scale in ''/pixel? (0.01) ") or 0.01)
     pupil = Pupil(wavelength)
 
-    psf = PSF(pupil)
+    psf = PSF(pupil, scale)
     psf.resize_psf(wavelength=wavelength, size=np.shape(psf.a)[0], scale=scale)
     psf.save()  # does not fill the header of the .fits image (yet)
 
