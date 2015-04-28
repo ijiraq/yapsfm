@@ -1,9 +1,22 @@
 import unittest
 
-from PSFModel import odd_zernike
-
+import glob
+import numpy as np
+from psf_model import aperture
+from psf_model import odd_zernike
+from psf_model import fits2aperture
 
 class PSFModelTest(unittest.TestCase):
+
+    def test_aperture(self):
+        if glob.glob('aperture.fits'):
+            result = fits2aperture('aperture.fits')
+        else:
+            result = aperture(101, 'HST')
+        self.assertEqual(0, result[0, 0])
+        self.assertEqual(0, result[50, 0])
+        self.assertEqual(0, result[50, 50])
+        self.assertEqual(0, result[100, 100])
 
     def test_zodd(self):
         """
@@ -13,8 +26,8 @@ class PSFModelTest(unittest.TestCase):
         No idea what it actually does, of course. Let's not let that get in the
         way.
         """
-        result = odd_zernike(1, 1, 1, 1)
-        self.assertEqual(1.6829419696157935, result)  # Woo I'm doing astronomy
+        result = odd_zernike(1, 1, 1, np.pi)
+        self.assertEqual(1.6829419696157935, result)
 
     # You can add further tests by simply adding methods starting with test_*
     # and importing your test target at the top of this file.
