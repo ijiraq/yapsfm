@@ -28,13 +28,13 @@ class OpticalArray(object):
     The ancestor class, it has the basic properties *array_size*, *center*, *name*, the data array *_a*, and a polar
     coordinates trigger *_polar*, allowing to switch between polar and cartesian coordinate systems.
     """
-    def __init__(self, size, polar=False, wavelength=None, scale=None):
+    def __init__(self, size, polar=False, scale=None):
         self.array_size = size
         self.center = [self.array_size//2., self.array_size//2.]
         self.name = ''
         self._a = None
         self._polar = polar
-        self.wavelength = wavelength
+        self.wavelength = None
         self._dist = None
         self.scale = scale
 
@@ -49,7 +49,7 @@ class OpticalArray(object):
             self._dist.append(float(data[i].partition('#')[0].strip()))
         return self._dist
 
-    def save(self, name=None):
+    def save(self):
         hdu = pyfits.PrimaryHDU(self.a)
         header = hdu.header
         now = dt.utcnow()
@@ -69,10 +69,8 @@ class OpticalArray(object):
             header['PIXSCALE'] = (self.scale, 'Pixel scale in arcseconds')
             header['WAVELNTH'] = (self.wavelength, 'PSF wavelength in microns')
 
-        if name is None:
-            name = self.name
-        hdu.writeto('%s.fits' % name, clobber=True)
-        print 'saving %s' % name
+        hdu.writeto('%s.fits' % self.name, clobber=True)
+        print 'saving %s' % self.name
 
     @property
     def a(self):
@@ -192,42 +190,17 @@ class Aperture(OpticalArray):
         return
 
 
-class PSF(OpticalArray):
+class Pupil(OpticalArray):
     """
-    PSF inherits from Distorted and has properties *array_size*, *pupil*, *_a* the array containing the data, and
-    *name*. Its resolution can be modified using *resize_psf*, which will change the pixel resolution to *scale*.
+    Pupil inherits from OpticalArray, it has properties *opd* (the optical path differences) and *name*.
+    It can be computed using *_compute_pupil* which uses the opd, or *_path_diff* of the wavefront.
     """
-    def __init__(self, wavelength, scale):
-        self.array_size = 505
-        self._a = None
-        super(PSF, self).__init__(self.array_size, wavelength=wavelength, scale=scale)
-        self.name = 'Psf'
-        self._dist = self.dist
+    def __init__(self, wavelength, array_size=101):
+        super(Pupil, self).__init__(array_size)
         self.wavelength = wavelength
-        self.scale = scale
         self.opd = self._path_diff()
-        self.pupil = self._compute_pupil()
-
-    @property
-    def a(self):
-        if self._a is not None:
-            return self._a
-        print "Starting FFT..."
-        tmp = np.fft.fft2(self.pupil, s=[self.array_size, self.array_size])  # padding with 0s
-        tmp = np.fft.fftshift(tmp)  # switch quadrant to place the origin in the middle of the array
-        print "... done"
-        self._a = np.real(np.multiply(tmp, np.conjugate(tmp)))
-        # self.save(name='a')
-        return self._a
-
-    def resize_psf(self):
-        print "resizing PSF to match pixel resolution of %s''/px..." % self.scale
-        print np.shape(self.a)
-        new_psf = scipy.ndimage.interpolation.geometric_transform(self.a, rebin, extra_arguments=(
-            self.wavelength, self.array_size, self.scale))
-        # new_psf = new_psf[size//2.-32:size//2.+32, size//2.-32:size//2.+32]
-        print '... done'
-        self._a = new_psf
+        self._compute_pupil()
+        self.name = 'Pupil'
 
     def _compute_pupil(self):
         print 'Computing pupil...'
@@ -240,9 +213,8 @@ class PSF(OpticalArray):
             aperture.make_hst_ap()
 
         pass
-        pupil = np.multiply(aperture.a, np.exp(np.divide(2j*np.pi*self.opd, self.wavelength)))
+        self.a = np.multiply(aperture.a, np.exp(np.divide(2j*np.pi*self.opd, self.wavelength)))
         print '... done'
-        return pupil
 
     def _path_diff(self):
         zernike_modes = [(1, 1), (1, -1), (2, 0), (2, -2), (2, 2), (3, -1), (3, 1), (3, -3), (3, 3), (4, 0)]  # z2..z11
@@ -266,6 +238,41 @@ class PSF(OpticalArray):
         print '... and converted back to cartesian space.'
 
         return zernike_total.a
+
+
+class PSF(OpticalArray):
+    """
+    PSF inherits from Distorted and has properties *array_size*, *pupil*, *_a* the array containing the data, and
+    *name*. Its resolution can be modified using *resize_psf*, which will change the pixel resolution to *scale*.
+    """
+    def __init__(self, pupil, scale):
+        self.array_size = 505
+        self.pupil = pupil
+        self._a = None
+        super(PSF, self).__init__(self.array_size, pupil.wavelength, scale)
+        self.name = 'Psf'
+        self._dist = pupil.dist
+        self.wavelength = pupil.wavelength
+        self.scale = scale
+
+    @property
+    def a(self):
+        if self._a is not None:
+            return self._a
+        # print 'Starting FFT with zero-padding factor of %s...' % (self.array_size/np.shape(pupil.a)[0])
+        tmp = np.fft.fft2(self.pupil.a, s=[self.array_size, self.array_size])  # padding with 0s
+        tmp = np.fft.fftshift(tmp)  # switch quadrant to place the origin in the middle of the array
+        print "... done"
+        self._a = np.real(np.multiply(tmp, np.conjugate(tmp)))
+        return self._a
+
+    def resize_psf(self, wavelength=.76, size=505, scale=0.110):
+        print "resizing PSF to match pixel resolution of %s''/px..." % scale
+        new_psf = scipy.ndimage.interpolation.geometric_transform(self._a, rebin, extra_arguments=(
+            wavelength, size, scale))
+        # new_psf = new_psf[size//2.-32:size//2.+32, size//2.-32:size//2.+32]
+        print '... done'
+        self._a = new_psf
 
 
 def rebin(coords, wavelength, size, detector_scale):
