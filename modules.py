@@ -19,6 +19,7 @@ import glob
 import pyfits
 import numpy as np
 import scipy.ndimage.interpolation
+from scipy.interpolate import interp1d
 from datetime import datetime as dt
 import zernike as ze
 
@@ -242,7 +243,7 @@ class Pupil(OpticalArray):
 
 class PSF(OpticalArray):
     """
-    PSF inherits from Distorted and has properties *array_size*, *pupil*, *_a* the array containing the data, and
+    PSF inherits from OpticalArray and has properties *array_size*, *pupil*, *_a* the array containing the data, and
     *name*. Its resolution can be modified using *resize_psf*, which will change the pixel resolution to *scale*.
     """
     def __init__(self, pupil, scale):
@@ -291,3 +292,58 @@ def rebin(coords, wavelength, size, detector_scale):
     x = (coords[1]-size//2.)*detector_scale/scale_factor+(size//2.)
     y = (coords[0]-size//2.)*detector_scale/scale_factor+(size//2.)
     return y, x
+
+
+class PolyPSF(OpticalArray):
+    """
+    Polychromatic PSF class. Inherits from OpticalArray.
+    """
+    def __init__(self, band, spectral_type='A', size=505):
+        super(PolyPSF, self).__init__(size)
+        self.band = band
+        self.spectral_type = spectral_type
+        self._wavelength_contributions = None
+        self.sed_file = 'sed_%s0_fe0.txt' % spectral_type.lower()
+        self._x = None
+        self._flux = None
+
+    @property
+    def _get_sed(self):
+        """
+        Reads the SED profile from files
+        """
+        if self._x is not None and self._flux is not None:
+            return
+        han = open('SED/%s' % self.sed_file)
+        data = han.readlines()
+        han.close()
+
+        x, flux = [], []
+        for i in range(len(data)):
+            xy = data[i].split()
+            if xy:
+                x.append(xy[0])
+                flux.append(xy[1])
+        self._x = x
+        self._flux = flux
+        return self._x, self._flux
+
+    @property
+    def wavelength_contributions(self):
+        """
+        Computes the contributions of all 10 evenly-spaced wavelength in the filter band.
+        :return: wavelength_contributions. tuple of lists, containing the 10 wavelength and their relative contribution
+        """
+        if self._wavelength_contributions is not None:
+            return self._wavelength_contributions
+        bands = dict(Z=(0.76, 0.977), Y=(0.927, 1.192), J=(1.131, 1.454), H=(1.380, 1.774), F=(1.683, 2.000),
+                     Wide=(0.927, 2.000))
+
+        spectral_interpolation = interp1d(self._x, self._flux, kind='cubic')
+
+        waves = np.linspace(bands[self.band][0], bands[self.band][1], 10)  # Takes 10 wavelengths in band
+        self._wavelength_contributions = [waves, spectral_interpolation(waves)]
+
+        return self._wavelength_contributions
+
+
