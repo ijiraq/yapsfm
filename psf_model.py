@@ -6,13 +6,24 @@ It then computes an on-axis PSF model using the file distortions.par as source o
 """
 
 import numpy as np
-
+from argparse import ArgumentParser
 from modules import Pupil, PSF
 
 
 def main():
-    wavelength = float(raw_input('wavelength? (0.76 to 2.00 microns) ') or .76)
-    scale = float(raw_input("final pixel scale in ''/pixel? (0.01) ") or 0.01)
+    usage = "Creates a PSF model for wavelength at input scale. If no option is specified, " \
+            "user will be asked for input."
+    parser = ArgumentParser(usage=usage)
+    parser.add_argument('-w', type=float, dest='wavelength', default=None, action='store',
+                        help='wavelength at which to compute the PSF. Between 0.76 and 2.00 microns.')
+    parser.add_argument('-s', type=float, dest='scale', default=None, action='store',
+                        help='final pixel scale in ''/pixel.')
+    args = parser.parse_args()
+
+    wavelength = float(raw_input('wavelength? (0.76 to 2.00 microns) ') or .76) if args.wavelength is None else \
+        args.wavelength
+    scale = float(raw_input("final pixel scale in ''/pixel? (0.01) ") or 0.01) if args.scale is None else args.scale
+
     pupil = Pupil(wavelength)
 
     psf = PSF(pupil, scale)
