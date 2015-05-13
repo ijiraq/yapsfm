@@ -29,7 +29,7 @@ class OpticalArray(object):
     The ancestor class, it has the basic properties *array_size*, *center*, *name*, the data array *_a*, and a polar
     coordinates trigger *_polar*, allowing to switch between polar and cartesian coordinate systems.
     """
-    def __init__(self, size, polar=False, scale=None):
+    def __init__(self, size, polar=False, scale=None, poly=False):
         self.array_size = size
         self.center = [self.array_size//2., self.array_size//2.]
         self.name = ''
@@ -37,6 +37,9 @@ class OpticalArray(object):
         self._polar = polar
         self.wavelength = None
         self._dist = None
+        self._poly = poly
+        self.band = None
+        self.spectral_type = None
         self.scale = scale
 
     @property
@@ -69,6 +72,11 @@ class OpticalArray(object):
             header['SPHERICL'] = (self._dist[9], 'PSF RMS spherical (waves @ 547 nm)')
             header['PIXSCALE'] = (self.scale, 'Pixel scale in arcseconds')
             header['WAVELNTH'] = (self.wavelength, 'PSF wavelength in microns')
+
+        if self._poly:
+            header['SPECTYPE'] = (self.spectral_type.upper(), 'Spectral type of target star')
+            header['BAND'] = (self.band, 'filter band used for polychromatic PSF')
+            header['WAVELNTH'] = ('polychromatic', 'PSF wavelength in microns')
 
         hdu.writeto('%s.fits' % self.name, clobber=True)
         print 'saving %s' % self.name
@@ -298,22 +306,24 @@ class PolyPSF(OpticalArray):
     """
     Polychromatic PSF class. Inherits from OpticalArray.
     """
-    def __init__(self, band, spectral_type='A', size=505):
-        super(PolyPSF, self).__init__(size)
+    def __init__(self, band, spectral_type='A', size=505, scale=0.01):
+        super(PolyPSF, self).__init__(size, poly=True, scale=scale)
         self.band = band
         self.spectral_type = spectral_type
         self._wavelength_contributions = None
         self.sed_file = 'sed_%s0_fe0.txt' % spectral_type.lower()
         self._x = None
         self._flux = None
+        self.name = 'polychromatic_psf'
+        self._dist = self.dist
 
-    @property
-    def _get_sed(self):
+    def get_sed(self):
         """
-        Reads the SED profile from files
+        Reads the SED profile from files and get the spectral energy distribution.
+        :return: self._x, self._flux : two lists, wavelength and its associated flux.
         """
         if self._x is not None and self._flux is not None:
-            return
+            return self._x, self._flux
         han = open('SED/%s' % self.sed_file)
         data = han.readlines()
         han.close()
@@ -322,13 +332,13 @@ class PolyPSF(OpticalArray):
         for i in range(len(data)):
             xy = data[i].split()
             if xy:
-                x.append(xy[0])
-                flux.append(xy[1])
+                x.append(float(xy[0]))
+                flux.append(float(xy[1]))
         self._x = x
         self._flux = flux
-        return self._x, self._flux
+        # return self._x, self._flux
+        return
 
-    @property
     def wavelength_contributions(self):
         """
         Computes the contributions of all 10 evenly-spaced wavelength in the filter band.
@@ -336,6 +346,7 @@ class PolyPSF(OpticalArray):
         """
         if self._wavelength_contributions is not None:
             return self._wavelength_contributions
+
         bands = dict(Z=(0.76, 0.977), Y=(0.927, 1.192), J=(1.131, 1.454), H=(1.380, 1.774), F=(1.683, 2.000),
                      Wide=(0.927, 2.000))
 
@@ -344,6 +355,26 @@ class PolyPSF(OpticalArray):
         waves = np.linspace(bands[self.band][0], bands[self.band][1], 10)  # Takes 10 wavelengths in band
         self._wavelength_contributions = [waves, spectral_interpolation(waves)]
 
-        return self._wavelength_contributions
+        # return self._wavelength_contributions
+        return
 
+    def create_polychrome(self):
+        tmp = np.zeros((self.array_size, self.array_size))
+        for i, wavel in enumerate(self._wavelength_contributions[0]):
+            pupil = Pupil(wavel)
+            psf = PSF(pupil, self.scale)
+            psf.resize_psf(wavelength=wavel, size=np.shape(psf.a)[0], scale=self.scale)  # scale is supposed to be 0.01
+            psf._a = psf.a * self._wavelength_contributions[1][i]
+            tmp += psf.a
+        self._a = tmp
+        return
 
+    def check_sed(self):
+        """
+        plot the SED of the star and the 10 wavelengths used to create the PSF, at the filter position.
+        """
+        import matplotlib.pyplot as plt
+        plt.plot(self._x, self._flux)
+        plt.plot(self._wavelength_contributions[0], self._wavelength_contributions[1], 'o')
+        plt.show()
+        return
