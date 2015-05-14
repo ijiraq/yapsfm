@@ -40,6 +40,7 @@ class OpticalArray(object):
         self._poly = poly
         self.band = None
         self.spectral_type = None
+        self._wavelength_contributions = None
         self.scale = scale
 
     @property
@@ -77,6 +78,8 @@ class OpticalArray(object):
             header['SPECTYPE'] = (self.spectral_type.upper(), 'Spectral type of target star')
             header['BAND'] = (self.band, 'filter band used for polychromatic PSF')
             header['WAVELNTH'] = ('polychromatic', 'PSF wavelength in microns')
+            for i, wavel in enumerate(self._wavelength_contributions[0]):
+                header['WAVEL%s' % i] = ('%s' % round(wavel, 3), 'wavelength in microns')
 
         if name is None:
             hdu.writeto('%s.fits' % self.name, clobber=True)
