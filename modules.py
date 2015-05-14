@@ -53,7 +53,7 @@ class OpticalArray(object):
             self._dist.append(float(data[i].partition('#')[0].strip()))
         return self._dist
 
-    def save(self):
+    def save(self, name=None):
         hdu = pyfits.PrimaryHDU(self.a)
         header = hdu.header
         now = dt.utcnow()
@@ -78,8 +78,12 @@ class OpticalArray(object):
             header['BAND'] = (self.band, 'filter band used for polychromatic PSF')
             header['WAVELNTH'] = ('polychromatic', 'PSF wavelength in microns')
 
-        hdu.writeto('%s.fits' % self.name, clobber=True)
-        print 'saving %s' % self.name
+        if name is None:
+            hdu.writeto('%s.fits' % self.name, clobber=True)
+            print 'saving %s.fits' % self.name
+        else:
+            hdu.writeto('%s.fits' % name, clobber=True)
+            print 'saving %s.fits' % name
 
     @property
     def a(self):
@@ -268,7 +272,6 @@ class PSF(OpticalArray):
     def a(self):
         if self._a is not None:
             return self._a
-        # print 'Starting FFT with zero-padding factor of %s...' % (self.array_size/np.shape(pupil.a)[0])
         tmp = np.fft.fft2(self.pupil.a, s=[self.array_size, self.array_size])  # padding with 0s
         tmp = np.fft.fftshift(tmp)  # switch quadrant to place the origin in the middle of the array
         print "... done"
@@ -279,7 +282,6 @@ class PSF(OpticalArray):
         print "resizing PSF to match pixel resolution of %s''/px..." % scale
         new_psf = scipy.ndimage.interpolation.geometric_transform(self._a, rebin, extra_arguments=(
             wavelength, size, scale))
-        # new_psf = new_psf[size//2.-32:size//2.+32, size//2.-32:size//2.+32]
         print '... done'
         self._a = new_psf
 
@@ -336,7 +338,6 @@ class PolyPSF(OpticalArray):
                 flux.append(float(xy[1]))
         self._x = x
         self._flux = flux
-        # return self._x, self._flux
         return
 
     def wavelength_contributions(self):
@@ -354,8 +355,6 @@ class PolyPSF(OpticalArray):
 
         waves = np.linspace(bands[self.band][0], bands[self.band][1], 10)  # Takes 10 wavelengths in band
         self._wavelength_contributions = [waves, spectral_interpolation(waves)]
-
-        # return self._wavelength_contributions
         return
 
     def create_polychrome(self):
@@ -364,6 +363,7 @@ class PolyPSF(OpticalArray):
             pupil = Pupil(wavel)
             psf = PSF(pupil, self.scale)
             psf.resize_psf(wavelength=wavel, size=np.shape(psf.a)[0], scale=self.scale)  # scale is supposed to be 0.01
+            # psf.save('polyPSF_%s' % wavel)  # consistency test: will save all the 10 PSFs.
             psf._a = psf.a * self._wavelength_contributions[1][i]
             tmp += psf.a
         self._a = tmp
