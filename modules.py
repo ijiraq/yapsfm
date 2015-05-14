@@ -76,10 +76,10 @@ class OpticalArray(object):
 
         if self._poly:
             header['SPECTYPE'] = (self.spectral_type.upper(), 'Spectral type of target star')
-            header['BAND'] = (self.band, 'filter band used for polychromatic PSF')
+            header['BAND'] = (self.band.upper(), 'filter band used for polychromatic PSF')
             header['WAVELNTH'] = ('polychromatic', 'PSF wavelength in microns')
             for i, wavel in enumerate(self._wavelength_contributions[0]):
-                header['WAVEL%s' % i] = ('%s' % round(wavel, 3), 'wavelength in microns')
+                header['WAVEL%s' % i] = (float('%.3f' % wavel), 'wavelength in microns')
 
         if name is None:
             hdu.writeto('%s.fits' % self.name, clobber=True)
@@ -313,8 +313,8 @@ class PolyPSF(OpticalArray):
     """
     def __init__(self, band, spectral_type='A', size=505, scale=0.01):
         super(PolyPSF, self).__init__(size, poly=True, scale=scale)
-        self.band = band
-        self.spectral_type = spectral_type
+        self.band = band.title()
+        self.spectral_type = spectral_type.title()
         self._wavelength_contributions = None
         self.sed_file = 'sed_%s0_fe0.txt' % spectral_type.lower()
         self._x = None
@@ -377,7 +377,7 @@ class PolyPSF(OpticalArray):
         plot the SED of the star and the 10 wavelengths used to create the PSF, at the filter position.
         """
         import matplotlib.pyplot as plt
-        plt.plot(self._x, self._flux)
-        plt.plot(self._wavelength_contributions[0], self._wavelength_contributions[1], 'o')
+        plt.plot(self._x, self._flux, 'b')
+        plt.plot(self._wavelength_contributions[0], self._wavelength_contributions[1], 'ro')
         plt.show()
         return
