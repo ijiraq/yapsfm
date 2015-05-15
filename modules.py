@@ -281,6 +281,10 @@ class PSF(OpticalArray):
         self._a = np.real(np.multiply(tmp, np.conjugate(tmp)))
         return self._a
 
+    @a.setter
+    def a(self, a):
+        self._a = a
+
     def resize_psf(self, wavelength=.76, size=505, scale=0.110):
         print "resizing PSF to match pixel resolution of %s''/px..." % scale
         new_psf = scipy.ndimage.interpolation.geometric_transform(self._a, rebin, extra_arguments=(
@@ -329,19 +333,12 @@ class PolyPSF(OpticalArray):
         """
         if self._x is not None and self._flux is not None:
             return self._x, self._flux
-        han = open('SED/%s' % self.sed_file)
-        data = han.readlines()
-        han.close()
 
-        x, flux = [], []
-        for i in range(len(data)):
-            xy = data[i].split()
-            if xy:
-                x.append(float(xy[0]))
-                flux.append(float(xy[1]))
+        data = np.genfromtxt('SED/%s' % self.sed_file)
+        x = data.transpose()[0]
+        flux = data.transpose()[1]
         self._x = x
         self._flux = flux
-        return
 
     def wavelength_contributions(self):
         """
@@ -358,7 +355,6 @@ class PolyPSF(OpticalArray):
 
         waves = np.linspace(bands[self.band][0], bands[self.band][1], 10)  # Takes 10 wavelengths in band
         self._wavelength_contributions = [waves, spectral_interpolation(waves)]
-        return
 
     def create_polychrome(self):
         tmp = np.zeros((self.array_size, self.array_size))
@@ -367,10 +363,9 @@ class PolyPSF(OpticalArray):
             psf = PSF(pupil, self.scale)
             psf.resize_psf(wavelength=wavel, size=np.shape(psf.a)[0], scale=self.scale)  # scale is supposed to be 0.01
             # psf.save('polyPSF_%s' % wavel)  # consistency test: will save all the 10 PSFs.
-            psf._a = psf.a * self._wavelength_contributions[1][i]
+            psf.a *= self._wavelength_contributions[1][i]
             tmp += psf.a
         self._a = tmp
-        return
 
     def check_sed(self):
         """
@@ -380,4 +375,3 @@ class PolyPSF(OpticalArray):
         plt.plot(self._x, self._flux, 'b')
         plt.plot(self._wavelength_contributions[0], self._wavelength_contributions[1], 'ro')
         plt.show()
-        return
