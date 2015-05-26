@@ -7,6 +7,7 @@ It then computes an on-axis PSF model using the file distortions.par as source o
 
 import numpy as np
 from argparse import ArgumentParser
+import glob
 from modules import Pupil, PSF, PolyPSF
 
 
@@ -34,13 +35,13 @@ def main():
 
     scale = float(raw_input("final pixel scale in ''/pixel? (0.01) ") or 0.01) if args.scale is None else args.scale
 
-    if args.wavelength:
+    if args.wavelength:  # then monochromatic
         wavelength = args.wavelength
         pupil = Pupil(wavelength)
-        psf = PSF(pupil, scale)
+        psf = PSF(pupil, scale, np.shape(pupil.a)[0])
         psf.resize_psf(wavelength=wavelength, size=np.shape(psf.a)[0], scale=scale)
         psf.save(name="psf_%s" % wavelength)
-    elif args.band:
+    elif args.band:  # then polychromatic
         poly = PolyPSF(band=args.band, spectral_type=args.spectral_type, scale=scale)
         poly.get_sed()
         poly.wavelength_contributions()

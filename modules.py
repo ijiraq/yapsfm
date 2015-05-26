@@ -42,6 +42,7 @@ class OpticalArray(object):
         self.spectral_type = None
         self._wavelength_contributions = None
         self.scale = scale
+        self.b = None
 
     @property
     def dist(self, file_path='distortions.par'):
@@ -55,7 +56,20 @@ class OpticalArray(object):
         return self._dist
 
     def save(self, name=None):
-        hdu = pyfits.PrimaryHDU(self.a)
+        """
+        Will save the data array "a" in a fits file with header information as follow:
+        :param name: name of the .fits file to be written. If None, will call it self.name
+        :return: None
+        """
+        if self.b is None:
+            hdu = pyfits.PrimaryHDU(self.a)
+        else:
+            hdu = pyfits.PrimaryHDU()
+            list_arrays = list()
+            list_arrays.append(self.a)
+            for i in self.b:
+                list_arrays.append(i)
+            hdu.data = np.array(list_arrays)
         header = hdu.header
         now = dt.utcnow()
         created = "%Y-%m-%dT%H:%M:%S"
@@ -211,7 +225,7 @@ class Pupil(OpticalArray):
     Pupil inherits from OpticalArray, it has properties *opd* (the optical path differences) and *name*.
     It can be computed using *_compute_pupil* which uses the opd, or *_path_diff* of the wavefront.
     """
-    def __init__(self, wavelength, array_size=101):
+    def __init__(self, wavelength, array_size=1666):
         super(Pupil, self).__init__(array_size)
         self.wavelength = wavelength
         self.opd = self._path_diff()
@@ -228,7 +242,6 @@ class Pupil(OpticalArray):
         else:
             aperture.make_hst_ap()
 
-        pass
         self.a = np.multiply(aperture.a, np.exp(np.divide(2j*np.pi*self.opd, self.wavelength)))
         print '... done'
 
@@ -261,8 +274,8 @@ class PSF(OpticalArray):
     PSF inherits from OpticalArray and has properties *array_size*, *pupil*, *_a* the array containing the data, and
     *name*. Its resolution can be modified using *resize_psf*, which will change the pixel resolution to *scale*.
     """
-    def __init__(self, pupil, scale):
-        self.array_size = 505
+    def __init__(self, pupil, scale, array_size):
+        self.array_size = array_size
         self.pupil = pupil
         self._a = None
         super(PSF, self).__init__(self.array_size, pupil.wavelength, scale)
@@ -315,7 +328,7 @@ class PolyPSF(OpticalArray):
     """
     Polychromatic PSF class. Inherits from OpticalArray.
     """
-    def __init__(self, band, spectral_type='A', size=505, scale=0.01):
+    def __init__(self, band, spectral_type='A', size=1666, scale=0.01):
         super(PolyPSF, self).__init__(size, poly=True, scale=scale)
         self.band = band.title()
         self.spectral_type = spectral_type.title()
@@ -325,6 +338,7 @@ class PolyPSF(OpticalArray):
         self._flux = None
         self.name = 'polychromatic_psf'
         self._dist = self.dist
+        self.b = []
 
     def get_sed(self):
         """
@@ -357,13 +371,18 @@ class PolyPSF(OpticalArray):
         self._wavelength_contributions = [waves, spectral_interpolation(waves)]
 
     def create_polychrome(self):
+        """
+        Creates a polychromatic PSF by adding 10 PSFs computed at 10 wavelengths from self._wavelength_contributions
+        and add them to the list self.b
+        """
         tmp = np.zeros((self.array_size, self.array_size))
         for i, wavel in enumerate(self._wavelength_contributions[0]):
             pupil = Pupil(wavel)
-            psf = PSF(pupil, self.scale)
+            psf = PSF(pupil, self.scale, self.array_size)
             psf.resize_psf(wavelength=wavel, size=np.shape(psf.a)[0], scale=self.scale)  # scale is supposed to be 0.01
             # psf.save('polyPSF_%s' % wavel)  # consistency test: will save all the 10 PSFs.
             psf.a *= self._wavelength_contributions[1][i]
+            self.b.append(psf.a)  # add the array to the list of arrays for data cube creation
             tmp += psf.a
         self._a = tmp
 
