@@ -8,6 +8,8 @@ It then computes an on-axis PSF model using the file distortions.par as source o
 import numpy as np
 from argparse import ArgumentParser
 import glob
+import sys
+import pyfits
 from modules import Pupil, PSF, PolyPSF
 
 
@@ -35,14 +37,23 @@ def main():
 
     scale = float(raw_input("final pixel scale in ''/pixel? (0.01) ") or 0.01) if args.scale is None else args.scale
 
-    if args.wavelength:  # then monochromatic
+    if glob.glob("aperture.fits"):  # if there's an aperture.fits file, open it, otherwise, create an HST-like
+        with pyfits.open('aperture.fits') as hdu:
+            array = hdu[0].data
+            size = np.shape(array)[0]
+    else:
+        size = 101
+
+    if args.wavelength:  # if wavelength : monochromatic
+        # print >> sys.stdout, "size: %s" % size
         wavelength = args.wavelength
-        pupil = Pupil(wavelength)
+        pupil = Pupil(wavelength, size)
         psf = PSF(pupil, scale, np.shape(pupil.a)[0])
         psf.resize_psf(wavelength=wavelength, size=np.shape(psf.a)[0], scale=scale)
         psf.save(name="psf_%s" % wavelength)
-    elif args.band:  # then polychromatic
-        poly = PolyPSF(band=args.band, spectral_type=args.spectral_type, scale=scale)
+    elif args.band:  # if band : polychromatic
+        # print >> sys.stdout, "size: %s" % size
+        poly = PolyPSF(band=args.band, spectral_type=args.spectral_type, scale=scale, size=size)
         poly.get_sed()
         poly.wavelength_contributions()
         poly.create_polychrome()

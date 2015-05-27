@@ -16,6 +16,7 @@ a desired resolution.
 """
 
 import glob
+import sys
 import pyfits
 import numpy as np
 import scipy.ndimage.interpolation
@@ -97,10 +98,10 @@ class OpticalArray(object):
 
         if name is None:
             hdu.writeto('%s.fits' % self.name, clobber=True)
-            print 'saving %s.fits' % self.name
+            print >> sys.stdout, 'saving %s.fits' % self.name
         else:
             hdu.writeto('%s.fits' % name, clobber=True)
-            print 'saving %s.fits' % name
+            print >> sys.stdout, 'saving %s.fits' % name
 
     @property
     def a(self):
@@ -233,17 +234,17 @@ class Pupil(OpticalArray):
         self.name = 'Pupil'
 
     def _compute_pupil(self):
-        print 'Computing pupil...'
+        print >> sys.stdout, 'Computing pupil...'
 
         aperture = Aperture(self.array_size)
         if glob.glob('aperture.fits'):
-            print "... using 'aperture.fits'..."
+            print >> sys.stdout, "... using 'aperture.fits'..."
             aperture.fits2aperture()
         else:
             aperture.make_hst_ap()
 
         self.a = np.multiply(aperture.a, np.exp(np.divide(2j*np.pi*self.opd, self.wavelength)))
-        print '... done'
+        print >> sys.stdout, '... done'
 
     def _path_diff(self):
         zernike_modes = [(1, 1), (1, -1), (2, 0), (2, -2), (2, 2), (3, -1), (3, 1), (3, -3), (3, 3), (4, 0)]  # z2..z11
@@ -255,16 +256,16 @@ class Pupil(OpticalArray):
         zernike_total = OpticalArray(polar=True, size=self.array_size)
         for i in range(len(self.dist)):
             aj = self.dist[i]*.547/self.wavelength  # Zernike coefficient in microns, .547um is the reference wavelength
-            print 'Computing Z%s with aj=%s' % (2+i, aj)
+            print >> sys.stdout, 'Computing Z%s with aj=%s' % (2+i, aj)
             n, m = zernike_modes[i][0], zernike_modes[i][1]
             if m < 0.:
                 zernike_value = ze.odd_zernike(n, -m, rho, theta)
             else:
                 zernike_value = ze.even_zernike(n, m, rho, theta)
             zernike_total.a += np.multiply(zernike_value, aj)  # OPD = Sum aj Zj
-        print 'OPD computed...'
+        print >> sys.stdout, 'OPD computed...'
         zernike_total.polar2cart()
-        print '... and converted back to cartesian space.'
+        print >> sys.stdout, '... and converted back to cartesian space.'
 
         return zernike_total.a
 
@@ -290,7 +291,7 @@ class PSF(OpticalArray):
             return self._a
         tmp = np.fft.fft2(self.pupil.a, s=[self.array_size, self.array_size])  # padding with 0s
         tmp = np.fft.fftshift(tmp)  # switch quadrant to place the origin in the middle of the array
-        print "... done"
+        print >> sys.stdout, "... done"
         self._a = np.real(np.multiply(tmp, np.conjugate(tmp)))
         return self._a
 
@@ -299,10 +300,10 @@ class PSF(OpticalArray):
         self._a = a
 
     def resize_psf(self, wavelength=.76, size=505, scale=0.110):
-        print "resizing PSF to match pixel resolution of %s''/px..." % scale
+        print >> sys.stdout, "resizing PSF to match pixel resolution of %s''/px..." % scale
         new_psf = scipy.ndimage.interpolation.geometric_transform(self._a, rebin, extra_arguments=(
             wavelength, size, scale))
-        print '... done'
+        print >> sys.stdout, '... done'
         self._a = new_psf
 
 
@@ -329,7 +330,7 @@ class PolyPSF(OpticalArray):
     Polychromatic PSF class. Inherits from OpticalArray.
     """
     def __init__(self, band, spectral_type='A', size=1666, scale=0.01):
-        super(PolyPSF, self).__init__(size, poly=True, scale=scale)
+        super(PolyPSF, self).__init__(size=size, poly=True, scale=scale)
         self.band = band.title()
         self.spectral_type = spectral_type.title()
         self._wavelength_contributions = None
@@ -377,7 +378,7 @@ class PolyPSF(OpticalArray):
         """
         tmp = np.zeros((self.array_size, self.array_size))
         for i, wavel in enumerate(self._wavelength_contributions[0]):
-            pupil = Pupil(wavel)
+            pupil = Pupil(wavel, self.array_size)
             psf = PSF(pupil, self.scale, self.array_size)
             psf.resize_psf(wavelength=wavel, size=np.shape(psf.a)[0], scale=self.scale)  # scale is supposed to be 0.01
             # psf.save('polyPSF_%s' % wavel)  # consistency test: will save all the 10 PSFs.
