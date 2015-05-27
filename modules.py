@@ -18,6 +18,7 @@ a desired resolution.
 import glob
 import sys
 import pyfits
+import logging
 import numpy as np
 import scipy.ndimage.interpolation
 from scipy.interpolate import interp1d
@@ -98,10 +99,10 @@ class OpticalArray(object):
 
         if name is None:
             hdu.writeto('%s.fits' % self.name, clobber=True)
-            print >> sys.stdout, 'saving %s.fits' % self.name
+            print >> sys.stdout, 'Saving %s.fits' % self.name
         else:
             hdu.writeto('%s.fits' % name, clobber=True)
-            print >> sys.stdout, 'saving %s.fits' % name
+            print >> sys.stdout, 'Saving %s.fits' % name
 
     @property
     def a(self):
@@ -234,17 +235,17 @@ class Pupil(OpticalArray):
         self.name = 'Pupil'
 
     def _compute_pupil(self):
-        print >> sys.stdout, 'Computing pupil...'
+        logging.info("Computing pupil...")
 
         aperture = Aperture(self.array_size)
         if glob.glob('aperture.fits'):
-            print >> sys.stdout, "... using 'aperture.fits'..."
+            logging.info("... using 'aperture.fits'...")
             aperture.fits2aperture()
         else:
             aperture.make_hst_ap()
 
         self.a = np.multiply(aperture.a, np.exp(np.divide(2j*np.pi*self.opd, self.wavelength)))
-        print >> sys.stdout, '... done'
+        logging.info("... done")
 
     def _path_diff(self):
         zernike_modes = [(1, 1), (1, -1), (2, 0), (2, -2), (2, 2), (3, -1), (3, 1), (3, -3), (3, 3), (4, 0)]  # z2..z11
@@ -256,16 +257,16 @@ class Pupil(OpticalArray):
         zernike_total = OpticalArray(polar=True, size=self.array_size)
         for i in range(len(self.dist)):
             aj = self.dist[i]*.547/self.wavelength  # Zernike coefficient in microns, .547um is the reference wavelength
-            print >> sys.stdout, 'Computing Z%s with aj=%s' % (2+i, aj)
+            logging.info("Computing Z%s with aj=%s" % (2+i, aj))
             n, m = zernike_modes[i][0], zernike_modes[i][1]
             if m < 0.:
                 zernike_value = ze.odd_zernike(n, -m, rho, theta)
             else:
                 zernike_value = ze.even_zernike(n, m, rho, theta)
             zernike_total.a += np.multiply(zernike_value, aj)  # OPD = Sum aj Zj
-        print >> sys.stdout, 'OPD computed...'
+        logging.info("OPD computed...")
         zernike_total.polar2cart()
-        print >> sys.stdout, '... and converted back to cartesian space.'
+        logging.info("... and converted back to cartesian space.")
 
         return zernike_total.a
 
@@ -291,7 +292,7 @@ class PSF(OpticalArray):
             return self._a
         tmp = np.fft.fft2(self.pupil.a, s=[self.array_size, self.array_size])  # padding with 0s
         tmp = np.fft.fftshift(tmp)  # switch quadrant to place the origin in the middle of the array
-        print >> sys.stdout, "... done"
+        logging.info("Updating PSF ... done")
         self._a = np.real(np.multiply(tmp, np.conjugate(tmp)))
         return self._a
 
@@ -300,10 +301,10 @@ class PSF(OpticalArray):
         self._a = a
 
     def resize_psf(self, wavelength=.76, size=505, scale=0.110):
-        print >> sys.stdout, "resizing PSF to match pixel resolution of %s''/px..." % scale
+        logging.info("Resizing PSF to match pixel resolution of %s''/px..." % scale)
         new_psf = scipy.ndimage.interpolation.geometric_transform(self._a, rebin, extra_arguments=(
             wavelength, size, scale))
-        print >> sys.stdout, '... done'
+        logging.info("... done")
         self._a = new_psf
 
 

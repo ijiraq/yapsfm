@@ -8,7 +8,7 @@ It then computes an on-axis PSF model using the file distortions.par as source o
 import numpy as np
 from argparse import ArgumentParser
 import glob
-import sys
+import logging
 import pyfits
 from modules import Pupil, PSF, PolyPSF
 
@@ -30,7 +30,19 @@ def main():
     parser.add_argument('-t', '--type', type=str, dest='spectral_type', default=None, action='store',
                         help="spectral type of target star. B, A, F, G, K, M handled. "
                              "Required if polychromatic PSF.")
+    parser.add_argument('-v', '--verbose', type=str, dest='verbose', default='info', action='store',
+                        help="verbose level, from most to least exhaustive: debug, info, warning, error, critical. "
+                             "Default: info")
     args = parser.parse_args()
+
+    # defining verbose level
+    levels = {'debug': logging.DEBUG,
+              'info': logging.INFO,
+              'warning': logging.WARNING,
+              'error': logging.ERROR,
+              'critical': logging.CRITICAL}
+    level = levels.get(args.verbose, logging.NOTSET)
+    logging.basicConfig(format='%(message)s', level=level)
 
     if args.band and args.spectral_type is None:
         parser.error("--band (-b) requires --type (-t).")
@@ -40,19 +52,18 @@ def main():
     if glob.glob("aperture.fits"):  # if there's an aperture.fits file, open it, otherwise, create an HST-like
         with pyfits.open('aperture.fits') as hdu:
             array = hdu[0].data
-            size = np.shape(array)[0]
+            size = np.shape(array)[0]  # aperture.fits is supposed to be a square array
     else:
         size = 101
+    logging.debug("array size: %s" % size)
 
     if args.wavelength:  # if wavelength : monochromatic
-        # print >> sys.stdout, "size: %s" % size
         wavelength = args.wavelength
         pupil = Pupil(wavelength, size)
         psf = PSF(pupil, scale, np.shape(pupil.a)[0])
         psf.resize_psf(wavelength=wavelength, size=np.shape(psf.a)[0], scale=scale)
         psf.save(name="psf_%s" % wavelength)
     elif args.band:  # if band : polychromatic
-        # print >> sys.stdout, "size: %s" % size
         poly = PolyPSF(band=args.band, spectral_type=args.spectral_type, scale=scale, size=size)
         poly.get_sed()
         poly.wavelength_contributions()
