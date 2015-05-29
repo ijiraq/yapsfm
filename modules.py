@@ -362,7 +362,7 @@ class PolyPSF(OpticalArray):
         self._x = None
         self._flux = None
         self.name = 'polychromatic_psf'
-        self._dist = self.dist
+        self._dist = None
         self.b = []
 
     def get_sed(self):
