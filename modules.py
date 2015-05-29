@@ -30,6 +30,8 @@ class OpticalArray(object):
     """
     The ancestor class, it has the basic properties *array_size*, *center*, *name*, the data array *_a*, and a polar
     coordinates trigger *_polar*, allowing to switch between polar and cartesian coordinate systems.
+
+    init takes: size, polar=False, scale=None, poly=False
     """
     def __init__(self, size, polar=False, scale=None, poly=False):
         self.array_size = size
@@ -55,6 +57,9 @@ class OpticalArray(object):
         self._dist = []
         for i in range(len(data)):
             self._dist.append(float(data[i].partition('#')[0].strip()))
+        logging.debug("distortions (@ 0.547um): %s" % self._dist)
+        logging.debug("distortions (@ %sum): %s" % (self.wavelength, [self._dist[i]*.547/self.wavelength for i in
+                                                    range(len(self._dist))]))
         return self._dist
 
     def save(self, name=None):
@@ -147,6 +152,8 @@ class OpticalArray(object):
 class Aperture(OpticalArray):
     """
     An aperture class, handling simple circular, HST-like or input file (.fits)
+
+    init takes: size
     """
     def __init__(self, size):
         super(Aperture, self).__init__(size)
@@ -207,11 +214,11 @@ class Aperture(OpticalArray):
         self.name = 'circular_aperture'
         return
 
-    def fits2aperture(self):
+    def fits2aperture(self, input_file='aperture.fits'):
         """
         Opens an aperture fits file and reads it.
         """
-        hdu = pyfits.open('aperture.fits')
+        hdu = pyfits.open(input_file)
         if len(hdu) < 2:  # check if aperture.fits has a header (it should not)
             self.a = hdu[0].data
         else:
@@ -219,6 +226,7 @@ class Aperture(OpticalArray):
 
         self.array_size = np.shape(self.a)[0]
         self.name = 'aperture'
+        logging.info("'aperture.fits' loaded, image size=%s" % self.array_size)
         return
 
 
@@ -226,6 +234,8 @@ class Pupil(OpticalArray):
     """
     Pupil inherits from OpticalArray, it has properties *opd* (the optical path differences) and *name*.
     It can be computed using *_compute_pupil* which uses the opd, or *_path_diff* of the wavefront.
+
+    init takes: wavelength, array_size=1666
     """
     def __init__(self, wavelength, array_size=1666):
         super(Pupil, self).__init__(array_size)
@@ -275,6 +285,8 @@ class PSF(OpticalArray):
     """
     PSF inherits from OpticalArray and has properties *array_size*, *pupil*, *_a* the array containing the data, and
     *name*. Its resolution can be modified using *resize_psf*, which will change the pixel resolution to *scale*.
+
+    init takes: pupil, scale, array_size
     """
     def __init__(self, pupil, scale, array_size):
         self.array_size = array_size
@@ -300,12 +312,21 @@ class PSF(OpticalArray):
     def a(self, a):
         self._a = a
 
-    def resize_psf(self, wavelength=.76, size=505, scale=0.110):
-        logging.info("Resizing PSF to match pixel resolution of %s''/px..." % scale)
-        new_psf = scipy.ndimage.interpolation.geometric_transform(self._a, rebin, extra_arguments=(
-            wavelength, size, scale))
+    def resize_psf(self):
+        """
+        Re-scale the PSF to the desired pixel resolution (*self.scale*). When calling geometric_transform, the
+        prefilter option has to be turned off (False) because the data is already filtered (no noise).
+        """
+        logging.debug("resize_psf parameters: wavelength=%s, array_size=%s, scale=%s" % (self.wavelength,
+                                                                                         self.array_size, self.scale))
+        logging.info("Resizing PSF to match pjixel resolution of %s''/px..." % self.scale)
+        logging.debug("before interpolation: max(psf.a)=%s, min(psf.a)=%s" % (np.max(self.a), np.min(self.a)))
+        new_psf = scipy.ndimage.interpolation.geometric_transform(self.a, rebin, order=3, prefilter=False,
+                                                                  extra_arguments=(self.wavelength, self.array_size,
+                                                                                   self.scale))
+        logging.debug("after interpolation: max(psf.a)=%s, min(psf.a)=%s" % (np.max(new_psf), np.min(new_psf)))
         logging.info("... done")
-        self._a = new_psf
+        self.a = new_psf
 
 
 def rebin(coords, wavelength, size, detector_scale):
@@ -329,6 +350,8 @@ def rebin(coords, wavelength, size, detector_scale):
 class PolyPSF(OpticalArray):
     """
     Polychromatic PSF class. Inherits from OpticalArray.
+
+    init takes: band, spectral_type='A', size=1666, scale=0.01
     """
     def __init__(self, band, spectral_type='A', size=1666, scale=0.01):
         super(PolyPSF, self).__init__(size=size, poly=True, scale=scale)
@@ -381,8 +404,8 @@ class PolyPSF(OpticalArray):
         for i, wavel in enumerate(self._wavelength_contributions[0]):
             pupil = Pupil(wavel, self.array_size)
             psf = PSF(pupil, self.scale, self.array_size)
-            psf.resize_psf(wavelength=wavel, size=np.shape(psf.a)[0], scale=self.scale)  # scale is supposed to be 0.01
-            # psf.save('polyPSF_%s' % wavel)  # consistency test: will save all the 10 PSFs.
+            psf.resize_psf()  # scale is supposed to be 0.01
+            # psf.save('polyPSF_%s' % wavel)  # consistency test: will save all the 10 PSFs in separate files.
             psf.a *= self._wavelength_contributions[1][i]
             self.b.append(psf.a)  # add the array to the list of arrays for data cube creation
             tmp += psf.a

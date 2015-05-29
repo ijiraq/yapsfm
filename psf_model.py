@@ -35,14 +35,17 @@ def main():
                              "Default: info")
     args = parser.parse_args()
 
-    # defining verbose level
+    # defining verbose level and output options
     levels = {'debug': logging.DEBUG,
               'info': logging.INFO,
               'warning': logging.WARNING,
               'error': logging.ERROR,
               'critical': logging.CRITICAL}
     level = levels.get(args.verbose, logging.NOTSET)
-    logging.basicConfig(format='%(message)s', level=level)
+    if args.verbose == 'info':
+        logging.basicConfig(format='%(message)s', level=level)
+    else:
+        logging.basicConfig(format='%(levelname)s:%(message)s', level=level)
 
     if args.band and args.spectral_type is None:
         parser.error("--band (-b) requires --type (-t).")
@@ -61,7 +64,7 @@ def main():
         wavelength = args.wavelength
         pupil = Pupil(wavelength, size)
         psf = PSF(pupil, scale, np.shape(pupil.a)[0])
-        psf.resize_psf(wavelength=wavelength, size=np.shape(psf.a)[0], scale=scale)
+        psf.resize_psf()
         psf.save(name="psf_%s" % wavelength)
     elif args.band:  # if band : polychromatic
         poly = PolyPSF(band=args.band, spectral_type=args.spectral_type, scale=scale, size=size)
