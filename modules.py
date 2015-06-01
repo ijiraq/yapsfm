@@ -68,6 +68,7 @@ class OpticalArray(object):
         :param name: name of the .fits file to be written. If None, will call it self.name
         :return: None
         """
+
         if self.b is None:
             hdu = pyfits.PrimaryHDU(self.a)
         else:
@@ -289,7 +290,7 @@ class PSF(OpticalArray):
     init takes: pupil, scale, array_size
     """
     def __init__(self, pupil, scale, array_size):
-        self.array_size = array_size
+        self.array_size = array_size*5  # for 0 padding
         self.pupil = pupil
         self._a = None
         super(PSF, self).__init__(self.array_size, pupil.wavelength, scale)
@@ -319,7 +320,7 @@ class PSF(OpticalArray):
         """
         logging.debug("resize_psf parameters: wavelength=%s, array_size=%s, scale=%s" % (self.wavelength,
                                                                                          self.array_size, self.scale))
-        logging.info("Resizing PSF to match pjixel resolution of %s''/px..." % self.scale)
+        logging.info("Resizing PSF to match pixel resolution of %s''/px..." % self.scale)
         logging.debug("before interpolation: max(psf.a)=%s, min(psf.a)=%s" % (np.max(self.a), np.min(self.a)))
         new_psf = scipy.ndimage.interpolation.geometric_transform(self.a, rebin, order=3, prefilter=False,
                                                                   extra_arguments=(self.wavelength, self.array_size,
@@ -400,12 +401,15 @@ class PolyPSF(OpticalArray):
         Creates a polychromatic PSF by adding 10 PSFs computed at 10 wavelengths from self._wavelength_contributions
         and add them to the list self.b
         """
-        tmp = np.zeros((self.array_size, self.array_size))
+        logging.debug("polychrome array_size=%s" % self.array_size)
+        tmp = np.zeros((self.array_size*5, self.array_size*5))  # after FFT, the array will be 5*bigger -> 0-padding
         for i, wavel in enumerate(self._wavelength_contributions[0]):
             pupil = Pupil(wavel, self.array_size)
+            logging.debug("pupil array_size=%s" % pupil.array_size)
             psf = PSF(pupil, self.scale, self.array_size)
             psf.resize_psf()  # scale is supposed to be 0.01
             # psf.save('polyPSF_%s' % wavel)  # consistency test: will save all the 10 PSFs in separate files.
+            logging.debug("psf.a size: %s" % psf.array_size)
             psf.a *= self._wavelength_contributions[1][i]
             self.b.append(psf.a)  # add the array to the list of arrays for data cube creation
             tmp += psf.a
