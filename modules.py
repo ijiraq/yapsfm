@@ -13,6 +13,9 @@ Pupil inherits from OpticalArray and has properties *opd* and *name*. Its method
 
 PSF inherits from OpticalArray and has properties *array_size*, *pupil*, *_a* and *name*. Its method is *rezie_psf* to
 a desired resolution.
+
+PolyPSF inherits from OpticalArray and has properties *band*, *spectral_type*, *size*, *scale*. Its methods are
+*get_sed*, *wavelength_contribution*, *create_polychrome* and *check_sed*.
 """
 
 import glob
@@ -408,7 +411,8 @@ class PolyPSF(OpticalArray):
             logging.debug("pupil array_size=%s" % pupil.array_size)
             psf = PSF(pupil, self.scale, self.array_size)
             psf.resize_psf()  # scale is supposed to be 0.01
-            # psf.save('polyPSF_%s' % wavel)  # consistency test: will save all the 10 PSFs in separate files.
+            if logging.debug:
+                psf.save('polyPSF_%s' % wavel)  # will save all the 10 PSFs in separate files if debug mode is on
             logging.debug("psf.a size: %s" % psf.array_size)
             psf.a *= self._wavelength_contributions[1][i]
             self.b.append(psf.a)  # add the array to the list of arrays for data cube creation

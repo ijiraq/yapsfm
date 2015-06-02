@@ -55,8 +55,9 @@ def main():
     if glob.glob("aperture.fits"):  # if there's an aperture.fits file, open it, otherwise, create an HST-like
         with pyfits.open('aperture.fits') as hdu:
             array = hdu[0].data
-            size = np.shape(array)[0]  # aperture.fits is supposed to be a square array
+            size = np.shape(array)[0]  # aperture.fits is a square array
     else:
+        logging.info("'aperture.fits' not found, creating new HST-like aperture: size = 101 pixels")
         size = 101
     logging.debug("array size: %s" % size)
 
