@@ -2,7 +2,8 @@
 """
 Main function to create PSF model.
 Asks for user input on *wavelength* and pixel *scale* (or resolution) in ''/pixel.
-It then computes an on-axis PSF model using the file distortions.par as source of optical distortions.
+It then computes an on-axis PSF model using the file distortions.par as source of optical distortions and aperture.fits
+as aperture source file. Aperture.fits must be located in the same folder as this script.
 """
 
 import numpy as np

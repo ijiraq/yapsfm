@@ -236,9 +236,9 @@ class Pupil(OpticalArray):
     Pupil inherits from OpticalArray, it has properties *opd* (the optical path differences) and *name*.
     It can be computed using *_compute_pupil* which uses the opd, or *_path_diff* of the wavefront.
 
-    init takes: wavelength, array_size=1666
+    init takes: wavelength, array_size
     """
-    def __init__(self, wavelength, array_size=1666):
+    def __init__(self, wavelength, array_size):
         super(Pupil, self).__init__(array_size)
         self.wavelength = wavelength
         self.opd = self._path_diff()
@@ -352,9 +352,9 @@ class PolyPSF(OpticalArray):
     """
     Polychromatic PSF class. Inherits from OpticalArray.
 
-    init takes: band, spectral_type='A', size=1666, scale=0.01
+    init takes: band, spectral_type, size, scale=0.01
     """
-    def __init__(self, band, spectral_type='A', size=1666, scale=0.01):
+    def __init__(self, band, spectral_type, size, scale=0.01):
         super(PolyPSF, self).__init__(size=size, poly=True, scale=scale)
         self.band = band.title()
         self.spectral_type = spectral_type.title()
