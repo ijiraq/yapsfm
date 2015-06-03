@@ -408,7 +408,7 @@ class PolyPSF(OpticalArray):
             logging.debug("pupil array_size=%s" % pupil.array_size)
             psf = PSF(pupil, self.scale, self.array_size)
             psf.resize_psf()  # scale is supposed to be 0.01
-            if logging.debug:
+            if logging.getLogger().getEffectiveLevel() == 'debug':
                 psf.save('polyPSF_%s' % wavel)  # will save all the 10 PSFs in separate files if debug mode is on
             logging.debug("psf.a size: %s" % psf.array_size)
             psf.a *= self._wavelength_contributions[1][i]
