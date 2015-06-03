@@ -226,8 +226,8 @@ class Aperture(OpticalArray):
             self.a = hdu[1].data
 
         self.array_size = np.shape(self.a)[0]
-        self.name = 'aperture'
-        logging.info("'aperture.fits' loaded, image size=%s" % self.array_size)
+        self.name = input_file.split('.')[0]
+        logging.info("'%s' loaded, image size=%s" % (input_file, self.array_size))
         return
 
 
