@@ -106,12 +106,9 @@ class OpticalArray(object):
             for i, wavel in enumerate(self._wavelength_contributions[0]):
                 header['WAVEL%s' % i] = (float('%.3f' % wavel), 'wavelength in microns')
 
-        if name is None:
-            hdu.writeto('%s.fits' % self.name, clobber=True)
-            print >> sys.stdout, 'Saving %s.fits' % self.name
-        else:
-            hdu.writeto('%s.fits' % name, clobber=True)
-            print >> sys.stdout, 'Saving %s.fits' % name
+        name = "{}.fits".format(name is not None and name or self.name)  # if name != None: name = name, else: self.name
+        hdu.writeto(name, clobber=True)
+        print >> sys.stdout, 'Saving %s' % name
 
     @property
     def a(self):
