@@ -85,7 +85,6 @@ class OpticalArray(object):
         else:
             hdu = pyfits.ImageHDU()
             list_arrays = list()
-            # list_arrays.append(self.a)
             for i in self.b:
                 list_arrays.append(i)
             hdu.data = np.array(list_arrays)
