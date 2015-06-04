@@ -55,14 +55,20 @@ class OpticalArray(object):
     def dist(self, file_path='distortions.par'):
         if self._dist is not None:
             return self._dist
-        data = open(file_path).readlines()
 
-        self._dist = []
-        for i in range(len(data)):
-            self._dist.append(float(data[i].partition('#')[0].strip()))
-        logging.debug("distortions (@ 0.547um): %s" % self._dist)
-        logging.debug("distortions (@ %sum): %s" % (self.wavelength, [self._dist[i]*.547/self.wavelength for i in
-                                                    range(len(self._dist))]))
+        if glob.glob(file_path) == list():
+            logging.debug("%s does not exist, using no distortion" % file_path)
+            self._dist = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            return self._dist
+        else:
+            data = open(file_path).readlines()
+
+            self._dist = []
+            for i in range(len(data)):
+                self._dist.append(float(data[i].partition('#')[0].strip()))
+            logging.debug("distortions (@ 0.547um): %s" % self._dist)
+            logging.debug("distortions (@ %sum): %s" % (self.wavelength, [self._dist[i]*.547/self.wavelength for i in
+                                                        range(len(self._dist))]))
         return self._dist
 
     def save(self, name=None):
@@ -238,8 +244,9 @@ class Pupil(OpticalArray):
 
     init takes: wavelength, array_size
     """
-    def __init__(self, wavelength, array_size):
+    def __init__(self, wavelength, array_size, aperture=None):
         super(Pupil, self).__init__(array_size)
+        self.aperture_name = aperture
         self.wavelength = wavelength
         self.opd = self._path_diff()
         self._compute_pupil()
@@ -249,9 +256,9 @@ class Pupil(OpticalArray):
         logging.info("Computing pupil...")
 
         aperture = Aperture(self.array_size)
-        if glob.glob('aperture.fits'):
-            logging.info("... using 'aperture.fits'...")
-            aperture.fits2aperture()
+        if self.aperture_name:
+            logging.info("... using '%s'..." % self.aperture_name)
+            aperture.fits2aperture(self.aperture_name)
         else:
             aperture.make_hst_ap()
 
@@ -354,8 +361,9 @@ class PolyPSF(OpticalArray):
 
     init takes: band, spectral_type, size, scale=0.01
     """
-    def __init__(self, band, spectral_type, size, scale=0.01):
+    def __init__(self, band, spectral_type, size, scale=0.01, aperture=None):
         super(PolyPSF, self).__init__(size=size, poly=True, scale=scale)
+        self.aperture_name = aperture
         self.band = band.title()
         self.spectral_type = spectral_type.title()
         self._wavelength_contributions = None
@@ -404,7 +412,7 @@ class PolyPSF(OpticalArray):
         logging.debug("polychrome array_size=%s" % self.array_size)
         tmp = np.zeros((self.array_size*5, self.array_size*5))  # after FFT, the array will be 5*bigger -> 0-padding
         for i, wavel in enumerate(self._wavelength_contributions[0]):
-            pupil = Pupil(wavel, self.array_size)
+            pupil = Pupil(wavel, self.array_size, self.aperture_name)
             logging.debug("pupil array_size=%s" % pupil.array_size)
             psf = PSF(pupil, self.scale, self.array_size)
             psf.resize_psf()  # scale is supposed to be 0.01

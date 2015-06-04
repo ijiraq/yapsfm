@@ -34,6 +34,8 @@ def main():
     parser.add_argument('-v', '--verbose', type=str, dest='verbose', default='info', action='store',
                         help="verbose level, from most to least exhaustive: debug, info, warning, error, critical. "
                              "Default: info")
+    parser.add_argument('-a', '--aperture', type=str, dest='aperture', default='aperture.fits', action='store',
+                        help="the name of the aperture .fits file to use during PSF creation. Default=%(default)s")
     args = parser.parse_args()
 
     # defining verbose level and output options
@@ -53,23 +55,23 @@ def main():
 
     scale = float(raw_input("final pixel scale in ''/pixel? (0.01) ") or 0.01) if args.scale is None else args.scale
 
-    if glob.glob("aperture.fits"):  # if there's an aperture.fits file, open it, otherwise, create an HST-like
-        with pyfits.open('aperture.fits') as hdu:
+    if glob.glob(args.aperture):  # if there's an aperture.fits file, open it, otherwise, create an HST-like
+        with pyfits.open(args.aperture) as hdu:
             array = hdu[0].data
             size = np.shape(array)[0]  # aperture.fits is a square array
     else:
-        logging.info("'aperture.fits' not found, creating new HST-like aperture: size = 101 pixels")
+        logging.info("'%s' not found, creating new HST-like aperture: size = 101 pixels" % args.aperture)
         size = 101
     logging.debug("array size: %s" % size)
 
     if args.wavelength:  # if wavelength : monochromatic
         wavelength = args.wavelength
-        pupil = Pupil(wavelength, size)
-        psf = PSF(pupil, scale, np.shape(pupil.a)[0])
+        pupil = Pupil(wavelength, size, args.aperture)
+        psf = PSF(pupil, scale, size)
         psf.resize_psf()
         psf.save(name="psf_%s" % wavelength)
     elif args.band:  # if band : polychromatic
-        poly = PolyPSF(band=args.band, spectral_type=args.spectral_type, scale=scale, size=size)
+        poly = PolyPSF(band=args.band, spectral_type=args.spectral_type, scale=scale, size=size, aperture=args.aperture)
         poly.get_sed()
         poly.wavelength_contributions()
         poly.create_polychrome()
