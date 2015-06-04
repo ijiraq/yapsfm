@@ -36,6 +36,8 @@ def main():
                              "Default: info")
     parser.add_argument('-a', '--aperture', type=str, dest='aperture', default='aperture.fits', action='store',
                         help="the name of the aperture .fits file to use during PSF creation. Default=%(default)s")
+    parser.add_argument('-i', '--individual', dest='switch', action='store_true',
+                        help="switch to save all the individual PSFs used to create the polychrome.")
     args = parser.parse_args()
 
     # defining verbose level and output options
@@ -74,7 +76,7 @@ def main():
         poly = PolyPSF(band=args.band, spectral_type=args.spectral_type, scale=scale, size=size, aperture=args.aperture)
         poly.get_sed()
         poly.wavelength_contributions()
-        poly.create_polychrome()
+        poly.create_polychrome(args.switch)
         poly.save()
 
 if __name__ == "__main__":

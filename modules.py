@@ -78,22 +78,27 @@ class OpticalArray(object):
         :return: None
         """
 
+        hdul = pyfits.HDUList()
         if self.b is None:
             hdu = pyfits.PrimaryHDU(self.a)
+            hdu2 = None
         else:
-            hdu = pyfits.PrimaryHDU()
+            hdu = pyfits.ImageHDU()
             list_arrays = list()
-            list_arrays.append(self.a)
+            # list_arrays.append(self.a)
             for i in self.b:
                 list_arrays.append(i)
             hdu.data = np.array(list_arrays)
+            hdu2 = pyfits.ImageHDU(self.a)
         header = hdu.header
         now = dt.utcnow()
         created = "%Y-%m-%dT%H:%M:%S"
         header['DATE'] = (now.strftime(created), 'Date and UTC time file was created')
+        header['INSTRUME'] = ('work in progress', 'Simulated instrument')
+        header['WAVELNTH'] = (self.wavelength, 'PSF wavelength in microns')
+        header['PIXSCALE'] = (self.scale, 'Pixel scale in arcseconds')
 
         if self._dist:
-            header['INSTRUME'] = ('work in progress', 'Simulated instrument')
             header['FOCUS'] = (self._dist[2], 'PSF RMS focus (waves @ 547 nm)')
             header['X_ASTIG'] = (self._dist[3], 'PSF RMS 0d astig (waves @ 547 nm)')
             header['Y_ASTIG'] = (self._dist[4], 'PSF RMS 45d astig (waves @ 547 nm)')
@@ -102,8 +107,6 @@ class OpticalArray(object):
             header['X_CLOVER'] = (self._dist[7], 'PSF RMS X-clover (waves @ 547 nm)')
             header['Y_CLOVER'] = (self._dist[8], 'PSF RMS Y-clover (waves @ 547 nm)')
             header['SPHERICL'] = (self._dist[9], 'PSF RMS spherical (waves @ 547 nm)')
-            header['PIXSCALE'] = (self.scale, 'Pixel scale in arcseconds')
-            header['WAVELNTH'] = (self.wavelength, 'PSF wavelength in microns')
 
         if self._poly:
             header['SPECTYPE'] = (self.spectral_type.upper(), 'Spectral type of target star')
@@ -113,7 +116,11 @@ class OpticalArray(object):
                 header['WAVEL%s' % i] = (float('%.3f' % wavel), 'wavelength in microns')
 
         name = "{}.fits".format(name is not None and name or self.name)  # if name != None: name = name, else: self.name
-        hdu.writeto(name, clobber=True)
+
+        hdul.append(hdu)
+        if hdu2:
+            hdul.append(hdu2)
+        hdul.writeto(name, clobber=True)
         print >> sys.stdout, 'Saving %s' % name
 
     @property
@@ -404,10 +411,11 @@ class PolyPSF(OpticalArray):
         waves = np.linspace(bands[self.band][0], bands[self.band][1], 10)  # Takes 10 wavelengths in band
         self._wavelength_contributions = [waves, spectral_interpolation(waves)]
 
-    def create_polychrome(self):
+    def create_polychrome(self, switch=0):
         """
         Creates a polychromatic PSF by adding 10 PSFs computed at 10 wavelengths from self._wavelength_contributions
         and add them to the list self.b
+        if switch=1, will save all of the 10 individual PSFs used to create the polychrome
         """
         logging.debug("polychrome array_size=%s" % self.array_size)
         tmp = np.zeros((self.array_size*5, self.array_size*5))  # after FFT, the array will be 5*bigger -> 0-padding
@@ -416,7 +424,7 @@ class PolyPSF(OpticalArray):
             logging.debug("pupil array_size=%s" % pupil.array_size)
             psf = PSF(pupil, self.scale, self.array_size)
             psf.resize_psf()  # scale is supposed to be 0.01
-            if logging.getLogger().getEffectiveLevel() == 'debug':
+            if switch:
                 psf.save('polyPSF_%s' % wavel)  # will save all the 10 PSFs in separate files if debug mode is on
             logging.debug("psf.a size: %s" % psf.array_size)
             psf.a *= self._wavelength_contributions[1][i]
