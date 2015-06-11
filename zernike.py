@@ -13,7 +13,7 @@ Outputs:
 """
 
 import numpy as np
-import pyfits
+from astropy.io import fits
 import glob
 import logging
 
@@ -95,7 +95,7 @@ def select_coeff(chip, wavelength, position):
     """
     if glob.glob('zernike_coefficients.fits'):
         logging.debug("opening 'zernike_coefficients.fits' and reading data...")
-        tbl = pyfits.open('zernike_coefficients.fits')
+        tbl = fits.open('zernike_coefficients.fits')
         tbl = tbl[1]  # table extensions can NOT be PrimaryHDU. tbl has a header and a data method.
         logging.debug("... done")
     else:
@@ -112,9 +112,13 @@ def select_coeff(chip, wavelength, position):
     ##########
     # interpolation part:
     # for each zernike mode, interpolate the 5 coefficients on a 4088 x 4088 grid times the (over)sampling factor,
-    # using spline (order 3 ?)
+    # using spline (order 3 ?). With only 5 points, the interpolation might be bound to fail (needs (k+1)**2 points,
+    # with k=1 for linear, k=3 for cubic, k=5 for quintic interpolation.
+    # Simply using the closest value might be a satisfying workaround.
     # (over)sampling factor = 0.11 / scale_factor (both in ''/px)
     ##########
+
+    detector_array = np.zeros((4088, 4088))
 
     dist = list()
     return dist

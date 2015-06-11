@@ -10,7 +10,7 @@ import numpy as np
 from argparse import ArgumentParser
 import glob
 import logging
-import pyfits
+from astropy.io import fits
 from modules import Pupil, PSF, PolyPSF
 
 
@@ -58,7 +58,7 @@ def main():
     scale = float(raw_input("final pixel scale in ''/pixel? (0.01) ") or 0.01) if args.scale is None else args.scale
 
     if glob.glob(args.aperture):  # if there's an aperture.fits file, open it, otherwise, create an HST-like
-        with pyfits.open(args.aperture) as hdu:
+        with fits.open(args.aperture) as hdu:
             array = hdu[0].data
             size = np.shape(array)[0]  # aperture.fits is a square array
     else:

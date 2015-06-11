@@ -20,7 +20,7 @@ PolyPSF inherits from OpticalArray and has properties *band*, *spectral_type*, *
 
 import glob
 import sys
-import pyfits
+from astropy.io import fits
 import logging
 import numpy as np
 import scipy.ndimage.interpolation
@@ -78,17 +78,17 @@ class OpticalArray(object):
         :return: None
         """
 
-        hdul = pyfits.HDUList()
+        hdul = fits.HDUList()
         if self.b is None:
-            hdu = pyfits.PrimaryHDU(self.a)
+            hdu = fits.PrimaryHDU(self.a)
             hdu2 = None
         else:
-            hdu = pyfits.ImageHDU()
+            hdu = fits.ImageHDU()
             list_arrays = list()
             for i in self.b:
                 list_arrays.append(i)
             hdu.data = np.array(list_arrays)
-            hdu2 = pyfits.ImageHDU(self.a)
+            hdu2 = fits.ImageHDU(self.a)
         header = hdu.header
         now = dt.utcnow()
         created = "%Y-%m-%dT%H:%M:%S"
@@ -231,7 +231,7 @@ class Aperture(OpticalArray):
         """
         Opens an aperture fits file and reads it.
         """
-        hdu = pyfits.open(input_file)
+        hdu = fits.open(input_file)
         if len(hdu) < 2:  # check if aperture.fits has a header (it should not)
             self.a = hdu[0].data
         else:
