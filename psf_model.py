@@ -16,8 +16,8 @@ from modules import Pupil, PSF, PolyPSF
 
 def main():
     usage = "Creates a PSF model for wavelength at input scale.\ncommand line options:\n" \
-            "for monochrome: psf_model.py -s -w\n" \
-            "for polychrome: psf_model.py -s -b -t"
+            "for monochrome: psf_model.py -s -w -p -c\n" \
+            "for polychrome: psf_model.py -s -b -t -p -c"
     parser = ArgumentParser(usage=usage)
     group = parser.add_mutually_exclusive_group(required=True)
     parser.add_argument('-s', '--scale', type=float, dest='scale', default=None, action='store',
@@ -38,6 +38,10 @@ def main():
                         help="the name of the aperture .fits file to use during PSF creation. Default=%(default)s")
     parser.add_argument('-i', '--individual', dest='switch', action='store_true',
                         help="switch to save all the individual PSFs used to create the polychrome.")
+    parser.add_argument('-p', '--position', type=list, dest='position', default=[0, 0], action='store',
+                        help="position of the computed PSF on the detector. 0 < x, y < 4088. Required.")
+    parser.add_argument('-c', '--chip', type=int, dest='chip', default=None, action='store',
+                        help="chip number. Required")
     args = parser.parse_args()
 
     # defining verbose level and output options
@@ -54,6 +58,8 @@ def main():
 
     if args.band and args.spectral_type is None:
         parser.error("--band (-b) requires --type (-t).")
+    if args.position is None or args.chip is None:
+        parser.error("--position (-p) and --chip (-c) are required.")
 
     scale = float(raw_input("final pixel scale in ''/pixel? (0.01) ") or 0.01) if args.scale is None else args.scale
 
@@ -68,12 +74,13 @@ def main():
 
     if args.wavelength:  # if wavelength : monochromatic
         wavelength = args.wavelength
-        pupil = Pupil(wavelength, size, args.aperture)
-        psf = PSF(pupil, scale, size)
+        pupil = Pupil(wavelength, size, args.aperture, args.position, args.chip)
+        psf = PSF(pupil, scale, size, args.position, args.chip)
         psf.resize_psf()
         psf.save(name="psf_%s" % wavelength)
     elif args.band:  # if band : polychromatic
-        poly = PolyPSF(band=args.band, spectral_type=args.spectral_type, scale=scale, size=size, aperture=args.aperture)
+        poly = PolyPSF(band=args.band, spectral_type=args.spectral_type, scale=scale, size=size, aperture=args.aperture,
+                       position=args.position, chip=args.chip)
         poly.get_sed()
         poly.wavelength_contributions()
         poly.create_polychrome(args.switch)
