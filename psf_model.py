@@ -56,6 +56,7 @@ def main():
     else:
         logging.basicConfig(format='%(levelname)s:%(message)s', level=level)
 
+    # required args
     if args.band and args.spectral_type is None:
         parser.error("--band (-b) requires --type (-t).")
     if args.position is None or args.chip is None:
@@ -72,6 +73,7 @@ def main():
         size = 101
     logging.debug("array size: %s" % size)
 
+    # mono- or polychromatic
     if args.wavelength:  # if wavelength : monochromatic
         wavelength = args.wavelength
         pupil = Pupil(wavelength, size, args.aperture, args.position, args.chip)

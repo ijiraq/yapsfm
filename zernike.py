@@ -117,7 +117,6 @@ def get_dist(chip, wavelength, position):
             if tbl.data['Wave'][i] == str(to_use):
                 rows.append(i)
     tmp_tbl = tbl.data[rows]  # sub table containing all the coefficients for *chip* and *wavelength*
-    # logging.debug("parameters are: %s" & tmp_tbl)
 
     pos = [float(position[i])/100.-20.44 for i in range(2)]  # new position on a 40.88 pixel grid
     logging.debug("the reduced position of the PSF is: %s" % pos)

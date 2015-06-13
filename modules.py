@@ -52,32 +52,11 @@ class OpticalArray(object):
         self.position = position
         self.chip = chip
 
-    """
-    @property
-    def dist(self, file_path='distortions.par'):
-        if self._dist is not None:
-            return self._dist
-
-        if glob.glob(file_path) == list():
-            logging.debug("%s does not exist, using no distortion" % file_path)
-            self._dist = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-            return self._dist
-        else:
-            data = open(file_path).readlines()
-
-            self._dist = []
-            for i in range(len(data)):
-                self._dist.append(float(data[i].partition('#')[0].strip()))
-            logging.debug("distortions (@ 0.547um): %s" % self._dist)
-            logging.debug("distortions (@ %sum): %s" % (self.wavelength, [self._dist[i]*.547/self.wavelength for i in
-                                                        range(len(self._dist))]))
-        return self._dist
-    """
     @property
     def dist(self):
         if self._dist is not None:
             return self._dist
-        self._dist = ze.get_dist(self.chip, self.wavelength, self.position, )
+        self._dist = ze.get_dist(self.chip, self.wavelength, self.position)
         return self._dist
 
     @dist.setter
@@ -294,8 +273,7 @@ class Pupil(OpticalArray):
 
         zernike_total = OpticalArray(polar=True, size=self.array_size)
         for i in range(len(zernike_modes)):  # self.dist or zernike_modes ?
-            # aj = self.dist[i]*.547/self.wavelength  # Zernike coefficient in microns, .547um is the reference wavelength
-            aj = self.dist[i]
+            aj = self.dist[i]  # coefficients are given at the corresponding wavelength
             logging.info("Computing Z%s with aj=%s" % (2+i, aj))
             n, m = zernike_modes[i][0], zernike_modes[i][1]
             if m < 0.:
@@ -392,7 +370,6 @@ class PolyPSF(OpticalArray):
         self._x = None
         self._flux = None
         self.name = 'polychromatic_psf'
-        self._dist = None
         self.b = []
 
     def get_sed(self):
