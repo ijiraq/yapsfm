@@ -340,6 +340,16 @@ class PSF(OpticalArray):
         self.a = new_psf
 
     def add_jitter(self, jitter_fwhm, scale_factor):
+        """
+        Add jitter to the PSF.
+
+        :param jitter_fwhm: the angular size of the gaussian jitter (in arcseconds)
+        :type jitter_fwhm: float
+        :param scale_factor: the angular pixel size of the PSF (in ''/pixel)
+        :type scale_factor: float
+        :return: the jitter convolved PSF array
+        :rtype: numpy array
+        """
 
         gauss = np.outer(scipy.signal.gaussian(20, scale_factor/jitter_fwhm),
                          scipy.signal.gaussian(20, scale_factor/jitter_fwhm))
