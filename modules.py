@@ -296,7 +296,7 @@ class PSF(OpticalArray):
 
     init takes: pupil, scale, array_size
     """
-    def __init__(self, pupil, scale, array_size, position, chip):
+    def __init__(self, pupil, scale, array_size, position, chip, jitter_fwhm=0.01):
         self.array_size = array_size*5  # for 0 padding
         self.pupil = pupil
         self._a = None
@@ -305,6 +305,7 @@ class PSF(OpticalArray):
         self._dist = pupil.dist
         self.wavelength = pupil.wavelength
         self.scale = scale
+        self.jitter_fwhm = jitter_fwhm
 
     @property
     def a(self):
@@ -331,7 +332,8 @@ class PSF(OpticalArray):
         logging.debug("before interpolation: max(psf.a)=%s, min(psf.a)=%s" % (np.max(self.a), np.min(self.a)))
         scale_factor = 0.0797/6.*(self.wavelength/0.76)  # at 5x zero-padding
         # add jitter to the PSF
-        self.add_jitter(0.01, scale_factor)
+        if self.jitter_fwhm > 0:
+            self.add_jitter(self.jitter_fwhm, scale_factor)
         new_psf = scipy.ndimage.interpolation.geometric_transform(self.a, rebin, order=3, prefilter=False,
                                                                   extra_arguments=(self.array_size,
                                                                                    self.scale, scale_factor))
@@ -353,9 +355,7 @@ class PSF(OpticalArray):
 
         gauss = np.outer(scipy.signal.gaussian(20, scale_factor/jitter_fwhm),
                          scipy.signal.gaussian(20, scale_factor/jitter_fwhm))
-        tmp = scipy.signal.fftconvolve(self._a, gauss)
-        self._a = tmp
-        return self._a
+        self._a = scipy.signal.fftconvolve(self._a, gauss, mode='same')
 
 
 def rebin(coords, size, detector_scale, scale_factor):
@@ -423,7 +423,7 @@ class PolyPSF(OpticalArray):
         waves = np.linspace(bands[self.band][0], bands[self.band][1], 10)  # Takes 10 wavelengths in band
         self._wavelength_contributions = [waves, spectral_interpolation(waves)]
 
-    def create_polychrome(self, switch=0):
+    def create_polychrome(self, switch=0, jitter_fwhm=0.01):
         """
         Creates a polychromatic PSF by adding 10 PSFs computed at 10 wavelengths from self._wavelength_contributions
         and add them to the list self.b
@@ -434,7 +434,7 @@ class PolyPSF(OpticalArray):
         for i, wavel in enumerate(self._wavelength_contributions[0]):
             pupil = Pupil(wavel, self.array_size, self.aperture_name, self.position, self.chip)
             logging.debug("pupil array_size=%s" % pupil.array_size)
-            psf = PSF(pupil, self.scale, self.array_size, self.position, self.chip)
+            psf = PSF(pupil, self.scale, self.array_size, self.position, self.chip, jitter_fwhm)
             psf.resize_psf()  # scale is supposed to be 0.01
             if switch:
                 psf.save('polyPSF_%s' % wavel)  # will save all the 10 PSFs in separate files if debug mode is on
