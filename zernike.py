@@ -108,7 +108,7 @@ def get_dist(chip, wavelength, position):
         wv.append(float(tbl.data['Wave'][i*5]))  # 5 measurements @ every wavelength
     wv.sort()
     # the actual wavelength to use (ie: the closest to measured):
-    to_use = wv[min(range(len(wv)), key=lambda i: abs(wv[i]-wavelength))]
+    to_use = wv[min(range(len(wv)), key=lambda k: abs(wv[k]-wavelength))]
     logging.debug("%sum will be used instead of %s, to find the zernike coefficients." % (to_use, wavelength))
 
     rows = list()

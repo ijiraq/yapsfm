@@ -56,7 +56,7 @@ class OpticalArray(object):
     def dist(self):
         if self._dist is not None:
             return self._dist
-        self._dist = ze.get_dist(self.chip, self.wavelength, self.position)
+        self.dist = ze.get_dist(self.chip, self.wavelength, self.position)
         return self._dist
 
     @dist.setter
