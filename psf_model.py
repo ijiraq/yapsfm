@@ -2,11 +2,15 @@
 """
 Main function to create PSF model.
 Asks for user input on *wavelength* and pixel *scale* (or resolution) in ''/pixel.
-It then computes an on-axis PSF model using the file distortions.par as source of optical distortions.
+It then computes an on-axis PSF model using the file distortions.par as source of optical distortions and aperture.fits
+as aperture source file. Aperture.fits must be located in the same folder as this script.
 """
 
 import numpy as np
 from argparse import ArgumentParser
+import glob
+import logging
+import pyfits
 from modules import Pupil, PSF, PolyPSF
 
 
@@ -27,24 +31,52 @@ def main():
     parser.add_argument('-t', '--type', type=str, dest='spectral_type', default=None, action='store',
                         help="spectral type of target star. B, A, F, G, K, M handled. "
                              "Required if polychromatic PSF.")
+    parser.add_argument('-v', '--verbose', type=str, dest='verbose', default='info', action='store',
+                        help="verbose level, from most to least exhaustive: debug, info, warning, error, critical. "
+                             "Default: info")
+    parser.add_argument('-a', '--aperture', type=str, dest='aperture', default='aperture.fits', action='store',
+                        help="the name of the aperture .fits file to use during PSF creation. Default=%(default)s")
+    parser.add_argument('-i', '--individual', dest='switch', action='store_true',
+                        help="switch to save all the individual PSFs used to create the polychrome.")
     args = parser.parse_args()
+
+    # defining verbose level and output options
+    levels = {'debug': logging.DEBUG,
+              'info': logging.INFO,
+              'warning': logging.WARNING,
+              'error': logging.ERROR,
+              'critical': logging.CRITICAL}
+    level = levels.get(args.verbose, logging.NOTSET)
+    if args.verbose == 'info':
+        logging.basicConfig(format='%(message)s', level=level)
+    else:
+        logging.basicConfig(format='%(levelname)s:%(message)s', level=level)
 
     if args.band and args.spectral_type is None:
         parser.error("--band (-b) requires --type (-t).")
 
     scale = float(raw_input("final pixel scale in ''/pixel? (0.01) ") or 0.01) if args.scale is None else args.scale
 
-    if args.wavelength:
+    if glob.glob(args.aperture):  # if there's an aperture.fits file, open it, otherwise, create an HST-like
+        with pyfits.open(args.aperture) as hdu:
+            array = hdu[0].data
+            size = np.shape(array)[0]  # aperture.fits is a square array
+    else:
+        logging.info("'%s' not found, creating new HST-like aperture: size = 101 pixels" % args.aperture)
+        size = 101
+    logging.debug("array size: %s" % size)
+
+    if args.wavelength:  # if wavelength : monochromatic
         wavelength = args.wavelength
-        pupil = Pupil(wavelength)
-        psf = PSF(pupil, scale)
-        psf.resize_psf(wavelength=wavelength, size=np.shape(psf.a)[0], scale=scale)
+        pupil = Pupil(wavelength, size, args.aperture)
+        psf = PSF(pupil, scale, size)
+        psf.resize_psf()
         psf.save(name="psf_%s" % wavelength)
-    elif args.band:
-        poly = PolyPSF(band=args.band, spectral_type=args.spectral_type, scale=scale)
+    elif args.band:  # if band : polychromatic
+        poly = PolyPSF(band=args.band, spectral_type=args.spectral_type, scale=scale, size=size, aperture=args.aperture)
         poly.get_sed()
         poly.wavelength_contributions()
-        poly.create_polychrome()
+        poly.create_polychrome(args.switch)
         poly.save()
 
 if __name__ == "__main__":
