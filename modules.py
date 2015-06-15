@@ -24,6 +24,7 @@ import logging
 import numpy as np
 import scipy.ndimage.interpolation
 from scipy.interpolate import interp1d
+import scipy.signal
 from datetime import datetime as dt
 import zernike as ze
 
@@ -328,26 +329,36 @@ class PSF(OpticalArray):
                                                                                          self.array_size, self.scale))
         logging.info("Resizing PSF to match pixel resolution of %s''/px..." % self.scale)
         logging.debug("before interpolation: max(psf.a)=%s, min(psf.a)=%s" % (np.max(self.a), np.min(self.a)))
+        scale_factor = 0.0797/6.*(self.wavelength/0.76)  # at 5x zero-padding
+        # add jitter to the PSF
+        self.add_jitter(0.01, scale_factor)
         new_psf = scipy.ndimage.interpolation.geometric_transform(self.a, rebin, order=3, prefilter=False,
-                                                                  extra_arguments=(self.wavelength, self.array_size,
-                                                                                   self.scale))
+                                                                  extra_arguments=(self.array_size,
+                                                                                   self.scale, scale_factor))
         logging.debug("after interpolation: max(psf.a)=%s, min(psf.a)=%s" % (np.max(new_psf), np.min(new_psf)))
         logging.info("... done")
         self.a = new_psf
 
+    def add_jitter(self, jitter_fwhm, scale_factor):
 
-def rebin(coords, wavelength, size, detector_scale):
+        gauss = np.outer(scipy.signal.gaussian(20, scale_factor/jitter_fwhm),
+                         scipy.signal.gaussian(20, scale_factor/jitter_fwhm))
+        tmp = scipy.signal.fftconvolve(self._a, gauss)
+        self._a = tmp
+        return self._a
+
+
+def rebin(coords, size, detector_scale, scale_factor):
     """
     Scale the PSF to the desired size (detector_scale, in ''/pixel)
     This function is called by *resize_psf* in geometric_transform.
 
     :param coords: list of array coordinates
-    :param wavelength: the wavelength at which the PSF is computed at
     :param size: size of the array
     :param detector_scale: the pixel resolution at which to rebin the PSF
+    :param scale_factor: the initial pixel resolution
     :return: new coordinates (python starts with y)
     """
-    scale_factor = 0.0797/6.*(wavelength/0.76)  # at 5x zero-padding
 
     x = (coords[1]-size//2.)*detector_scale/scale_factor+(size//2.)
     y = (coords[0]-size//2.)*detector_scale/scale_factor+(size//2.)
