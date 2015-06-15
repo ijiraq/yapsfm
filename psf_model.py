@@ -42,6 +42,8 @@ def main():
                         help="position of the computed PSF on the detector. 0 < x, y < 4088. Required.")
     parser.add_argument('-c', '--chip', type=int, dest='chip', default=None, action='store',
                         help="chip number. Required")
+    parser.add_argument('-j', '--jitter', type=float, dest='jitter', default=0.01, action='store',
+                        help="jitter (in arcseconds) affecting the PSF. Default=%default")
     args = parser.parse_args()
 
     # defining verbose level and output options
@@ -79,7 +81,7 @@ def main():
     if args.wavelength:  # if wavelength : monochromatic
         wavelength = args.wavelength
         pupil = Pupil(wavelength, size, aperture_name, args.position, args.chip)
-        psf = PSF(pupil, scale, size, args.position, args.chip)
+        psf = PSF(pupil, scale, size, args.position, args.chip, args.jitter)
         psf.resize_psf()
         psf.save(name="psf_%s" % wavelength)
     elif args.band:  # if band : polychromatic
@@ -87,7 +89,7 @@ def main():
                        position=args.position, chip=args.chip)
         poly.get_sed()
         poly.wavelength_contributions()
-        poly.create_polychrome(args.switch)
+        poly.create_polychrome(args.switch, args.jitter)
         poly.save()
 
 if __name__ == "__main__":
