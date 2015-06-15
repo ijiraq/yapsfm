@@ -68,20 +68,22 @@ def main():
         with fits.open(args.aperture) as hdu:
             array = hdu[0].data
             size = np.shape(array)[0]  # aperture.fits is a square array
+            aperture_name = args.aperture
     else:
         logging.info("'%s' not found, creating new HST-like aperture: size = 101 pixels" % args.aperture)
         size = 101
+        aperture_name = None
     logging.debug("array size: %s" % size)
 
     # mono- or polychromatic
     if args.wavelength:  # if wavelength : monochromatic
         wavelength = args.wavelength
-        pupil = Pupil(wavelength, size, args.aperture, args.position, args.chip)
+        pupil = Pupil(wavelength, size, aperture_name, args.position, args.chip)
         psf = PSF(pupil, scale, size, args.position, args.chip)
         psf.resize_psf()
         psf.save(name="psf_%s" % wavelength)
     elif args.band:  # if band : polychromatic
-        poly = PolyPSF(band=args.band, spectral_type=args.spectral_type, scale=scale, size=size, aperture=args.aperture,
+        poly = PolyPSF(band=args.band, spectral_type=args.spectral_type, scale=scale, size=size, aperture=aperture_name,
                        position=args.position, chip=args.chip)
         poly.get_sed()
         poly.wavelength_contributions()
