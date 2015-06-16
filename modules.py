@@ -18,13 +18,13 @@ PolyPSF inherits from OpticalArray and has properties *band*, *spectral_type*, *
 *get_sed*, *wavelength_contribution*, *create_polychrome* and *check_sed*.
 """
 
-import glob
 import sys
-import pyfits
+from astropy.io import fits
 import logging
 import numpy as np
 import scipy.ndimage.interpolation
 from scipy.interpolate import interp1d
+import scipy.signal
 from datetime import datetime as dt
 import zernike as ze
 
@@ -36,7 +36,7 @@ class OpticalArray(object):
 
     init takes: size, polar=False, scale=None, poly=False
     """
-    def __init__(self, size, polar=False, scale=None, poly=False):
+    def __init__(self, size, polar=False, scale=None, poly=False, position=None, chip=None):
         self.array_size = size
         self.center = [self.array_size//2., self.array_size//2.]
         self.name = ''
@@ -50,26 +50,19 @@ class OpticalArray(object):
         self._wavelength_contributions = None
         self.scale = scale
         self.b = None
+        self.position = position
+        self.chip = chip
 
     @property
-    def dist(self, file_path='distortions.par'):
+    def dist(self):
         if self._dist is not None:
             return self._dist
-
-        if glob.glob(file_path) == list():
-            logging.debug("%s does not exist, using no distortion" % file_path)
-            self._dist = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-            return self._dist
-        else:
-            data = open(file_path).readlines()
-
-            self._dist = []
-            for i in range(len(data)):
-                self._dist.append(float(data[i].partition('#')[0].strip()))
-            logging.debug("distortions (@ 0.547um): %s" % self._dist)
-            logging.debug("distortions (@ %sum): %s" % (self.wavelength, [self._dist[i]*.547/self.wavelength for i in
-                                                        range(len(self._dist))]))
+        self.dist = ze.get_dist(self.chip, self.wavelength, self.position)
         return self._dist
+
+    @dist.setter
+    def dist(self, dist):
+        self._dist = dist
 
     def save(self, name=None):
         """
@@ -78,17 +71,17 @@ class OpticalArray(object):
         :return: None
         """
 
-        hdul = pyfits.HDUList()
+        hdul = fits.HDUList()
         if self.b is None:
-            hdu = pyfits.PrimaryHDU(self.a)
+            hdu = fits.PrimaryHDU(self.a)
             hdu2 = None
         else:
-            hdu = pyfits.ImageHDU()
+            hdu = fits.ImageHDU()
             list_arrays = list()
             for i in self.b:
                 list_arrays.append(i)
             hdu.data = np.array(list_arrays)
-            hdu2 = pyfits.ImageHDU(self.a)
+            hdu2 = fits.ImageHDU(self.a)
         header = hdu.header
         now = dt.utcnow()
         created = "%Y-%m-%dT%H:%M:%S"
@@ -107,6 +100,7 @@ class OpticalArray(object):
             header['Y_CLOVER'] = (self._dist[8], 'PSF RMS Y-clover (waves @ 547 nm)')
             header['SPHERICL'] = (self._dist[9], 'PSF RMS spherical (waves @ 547 nm)')
 
+        logging.debug("poly: %s" % self._poly)
         if self._poly:
             header['SPECTYPE'] = (self.spectral_type.upper(), 'Spectral type of target star')
             header['BAND'] = (self.band.upper(), 'filter band used for polychromatic PSF')
@@ -231,7 +225,7 @@ class Aperture(OpticalArray):
         """
         Opens an aperture fits file and reads it.
         """
-        hdu = pyfits.open(input_file)
+        hdu = fits.open(input_file)
         if len(hdu) < 2:  # check if aperture.fits has a header (it should not)
             self.a = hdu[0].data
         else:
@@ -250,8 +244,8 @@ class Pupil(OpticalArray):
 
     init takes: wavelength, array_size
     """
-    def __init__(self, wavelength, array_size, aperture=None):
-        super(Pupil, self).__init__(array_size)
+    def __init__(self, wavelength, array_size, aperture, position, chip):
+        super(Pupil, self).__init__(size=array_size, position=position, chip=chip)
         self.aperture_name = aperture
         self.wavelength = wavelength
         self.opd = self._path_diff()
@@ -279,8 +273,8 @@ class Pupil(OpticalArray):
         rho, theta = np.meshgrid(rho_range, theta_range)
 
         zernike_total = OpticalArray(polar=True, size=self.array_size)
-        for i in range(len(self.dist)):
-            aj = self.dist[i]*.547/self.wavelength  # Zernike coefficient in microns, .547um is the reference wavelength
+        for i in range(len(zernike_modes)):  # self.dist or zernike_modes ?
+            aj = self.dist[i]  # coefficients are given at the corresponding wavelength
             logging.info("Computing Z%s with aj=%s" % (2+i, aj))
             n, m = zernike_modes[i][0], zernike_modes[i][1]
             if m < 0.:
@@ -302,15 +296,16 @@ class PSF(OpticalArray):
 
     init takes: pupil, scale, array_size
     """
-    def __init__(self, pupil, scale, array_size):
+    def __init__(self, pupil, scale, array_size, position, chip, jitter_fwhm=0.01):
         self.array_size = array_size*5  # for 0 padding
         self.pupil = pupil
         self._a = None
-        super(PSF, self).__init__(self.array_size, pupil.wavelength, scale)
+        super(PSF, self).__init__(size=self.array_size, scale=scale, position=position, chip=chip)
         self.name = 'Psf'
         self._dist = pupil.dist
         self.wavelength = pupil.wavelength
         self.scale = scale
+        self.jitter_fwhm = jitter_fwhm
 
     @property
     def a(self):
@@ -335,26 +330,45 @@ class PSF(OpticalArray):
                                                                                          self.array_size, self.scale))
         logging.info("Resizing PSF to match pixel resolution of %s''/px..." % self.scale)
         logging.debug("before interpolation: max(psf.a)=%s, min(psf.a)=%s" % (np.max(self.a), np.min(self.a)))
+        scale_factor = 0.0797/6.*(self.wavelength/0.76)  # at 5x zero-padding
+        # add jitter to the PSF
+        if self.jitter_fwhm > 0:
+            self.add_jitter(self.jitter_fwhm, scale_factor)
         new_psf = scipy.ndimage.interpolation.geometric_transform(self.a, rebin, order=3, prefilter=False,
-                                                                  extra_arguments=(self.wavelength, self.array_size,
-                                                                                   self.scale))
+                                                                  extra_arguments=(self.array_size,
+                                                                                   self.scale, scale_factor))
         logging.debug("after interpolation: max(psf.a)=%s, min(psf.a)=%s" % (np.max(new_psf), np.min(new_psf)))
         logging.info("... done")
         self.a = new_psf
 
+    def add_jitter(self, jitter_fwhm, scale_factor):
+        """
+        Add jitter to the PSF.
 
-def rebin(coords, wavelength, size, detector_scale):
+        :param jitter_fwhm: the angular size of the gaussian jitter (in arcseconds)
+        :type jitter_fwhm: float
+        :param scale_factor: the angular pixel size of the PSF (in ''/pixel)
+        :type scale_factor: float
+        :return: the jitter convolved PSF array
+        :rtype: numpy array
+        """
+
+        gauss = np.outer(scipy.signal.gaussian(20, scale_factor/jitter_fwhm),
+                         scipy.signal.gaussian(20, scale_factor/jitter_fwhm))
+        self._a = scipy.signal.fftconvolve(self._a, gauss, mode='same')
+
+
+def rebin(coords, size, detector_scale, scale_factor):
     """
     Scale the PSF to the desired size (detector_scale, in ''/pixel)
     This function is called by *resize_psf* in geometric_transform.
 
     :param coords: list of array coordinates
-    :param wavelength: the wavelength at which the PSF is computed at
     :param size: size of the array
     :param detector_scale: the pixel resolution at which to rebin the PSF
+    :param scale_factor: the initial pixel resolution
     :return: new coordinates (python starts with y)
     """
-    scale_factor = 0.0797/6.*(wavelength/0.76)  # at 5x zero-padding
 
     x = (coords[1]-size//2.)*detector_scale/scale_factor+(size//2.)
     y = (coords[0]-size//2.)*detector_scale/scale_factor+(size//2.)
@@ -367,8 +381,8 @@ class PolyPSF(OpticalArray):
 
     init takes: band, spectral_type, size, scale=0.01
     """
-    def __init__(self, band, spectral_type, size, scale=0.01, aperture=None):
-        super(PolyPSF, self).__init__(size=size, poly=True, scale=scale)
+    def __init__(self, band, spectral_type, size, scale, aperture, position, chip):
+        super(PolyPSF, self).__init__(size=size, poly=True, scale=scale, position=position, chip=chip)
         self.aperture_name = aperture
         self.band = band.title()
         self.spectral_type = spectral_type.title()
@@ -377,7 +391,6 @@ class PolyPSF(OpticalArray):
         self._x = None
         self._flux = None
         self.name = 'polychromatic_psf'
-        self._dist = None
         self.b = []
 
     def get_sed(self):
@@ -410,7 +423,7 @@ class PolyPSF(OpticalArray):
         waves = np.linspace(bands[self.band][0], bands[self.band][1], 10)  # Takes 10 wavelengths in band
         self._wavelength_contributions = [waves, spectral_interpolation(waves)]
 
-    def create_polychrome(self, switch=0):
+    def create_polychrome(self, switch=0, jitter_fwhm=0.01):
         """
         Creates a polychromatic PSF by adding 10 PSFs computed at 10 wavelengths from self._wavelength_contributions
         and add them to the list self.b
@@ -419,9 +432,9 @@ class PolyPSF(OpticalArray):
         logging.debug("polychrome array_size=%s" % self.array_size)
         tmp = np.zeros((self.array_size*5, self.array_size*5))  # after FFT, the array will be 5*bigger -> 0-padding
         for i, wavel in enumerate(self._wavelength_contributions[0]):
-            pupil = Pupil(wavel, self.array_size, self.aperture_name)
+            pupil = Pupil(wavel, self.array_size, self.aperture_name, self.position, self.chip)
             logging.debug("pupil array_size=%s" % pupil.array_size)
-            psf = PSF(pupil, self.scale, self.array_size)
+            psf = PSF(pupil, self.scale, self.array_size, self.position, self.chip, jitter_fwhm)
             psf.resize_psf()  # scale is supposed to be 0.01
             if switch:
                 psf.save('polyPSF_%s' % wavel)  # will save all the 10 PSFs in separate files if debug mode is on
