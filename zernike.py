@@ -109,7 +109,9 @@ def get_dist(chip, wavelength, position):
     wv.sort()
     # the actual wavelength to use (ie: the closest to measured):
     to_use = wv[min(range(len(wv)), key=lambda k: abs(wv[k]-wavelength))]
-    logging.debug("%sum will be used instead of %s, to find the zernike coefficients." % (to_use, wavelength))
+    if to_use == 2.0:
+        to_use = 2  # workaround for format
+    logging.debug("%sum will be used instead of %sum, to find the zernike coefficients." % (to_use, wavelength))
 
     rows = list()
     for i in range(len(tbl.data)):
@@ -149,6 +151,6 @@ def get_min_diff(pos, local):
     diff = list()
     for i in range(len(local)):
         diff.append(abs(float(pos) - float(local[i])))
-    pos_min = diff.index(min(diff))  # get the index of the minimum in diff, hence the minimum in local_x
+    pos_min = diff.index(min(diff))  # get the index of the minimum in diff, hence the minimum in local
     min_diff = local[pos_min]
     return min_diff
