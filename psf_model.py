@@ -38,12 +38,13 @@ def main():
                         help="the name of the aperture .fits file to use during PSF creation. Default=%(default)s")
     parser.add_argument('-i', '--individual', dest='switch', action='store_true',
                         help="switch to save all the individual PSFs used to create the polychrome.")
-    parser.add_argument('-p', '--position', nargs='+', dest='position', default=[0, 0], action='store',
-                        help="position of the computed PSF on the detector. 0 < x y < 4088. Required.")
+    parser.add_argument('-p', '--position', type=list, dest='position', default=[0, 0], action='store',
+                        help="position of the computed PSF on the detector. syntax: -p x y with 0 < x y < 4088. "
+                             "Required.")
     parser.add_argument('-c', '--chip', type=int, dest='chip', default=None, action='store',
-                        help="chip number. Required")
+                        help="chip number (1 to 18). Required")
     parser.add_argument('-j', '--jitter', type=float, dest='jitter', default=0.01, action='store',
-                        help="jitter (in arcseconds) affecting the PSF. Default=%default")
+                        help="jitter (in arcseconds) affecting the PSF. Default=%(default)s")
     args = parser.parse_args()
 
     # defining verbose level and output options
