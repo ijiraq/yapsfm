@@ -18,17 +18,22 @@ def main():
     usage = "Creates a PSF model for wavelength at input scale.\ncommand line options:\n" \
             "for monochrome: psf_model.py -s -w -p -c\n" \
             "for polychrome: psf_model.py -s -b -t -p -c"
-    parser = ArgumentParser(usage=usage)
+
+    parser = ArgumentParser(description=usage)
     group = parser.add_mutually_exclusive_group(required=True)
+
     parser.add_argument('-s', '--scale', type=float, dest='scale', default=None, action='store',
                         help="final pixel scale in ''/pixel. Required.")
+
     group.add_argument('-w', '--wavelength', type=float, dest='wavelength', default=None, action='store',
                        help='wavelength at which to compute the PSF. Between 0.76 and 2.00 microns. '
                             'Required if monochromatic PSF.')
-    group.add_argument('-b', '--band', type=str, dest='band', default=None, action='store',
+    group.add_argument('-b', '--band', type=str, dest='band', default=None, action='store', choices=['Z', 'Y', 'J', 'H', 'F', 'Wide'],
                        help="filter band to use for polychromatic PSF. Z, Y, J, H, F, Wide. "
                             "Required if polychromatic PSF.")
+
     parser.add_argument('-t', '--type', type=str, dest='spectral_type', default=None, action='store',
+                        choices = ['B', 'A', 'F', 'G', 'K', 'M'],
                         help="spectral type of target star. B, A, F, G, K, M handled. "
                              "Required if polychromatic PSF.")
     parser.add_argument('-v', '--verbose', type=str, dest='verbose', default='info', action='store',
@@ -38,12 +43,12 @@ def main():
                         help="the name of the aperture .fits file to use during PSF creation. Default=%(default)s")
     parser.add_argument('-i', '--individual', dest='switch', action='store_true',
                         help="switch to save all the individual PSFs used to create the polychrome.")
-    parser.add_argument('-p', '--position', nargs='+', dest='position', default=[0, 0], action='store',
+    parser.add_argument('-p', '--position', nargs='+', dest='position', default="0 0", action='store',
                         help="position of the computed PSF on the detector. 0 < x y < 4088. Required.")
     parser.add_argument('-c', '--chip', type=int, dest='chip', default=None, action='store',
                         help="chip number. Required")
-    parser.add_argument('-j', '--jitter', type=float, dest='jitter', default=0.01, action='store',
-                        help="jitter (in arcseconds) affecting the PSF. Default=%default")
+    parser.add_argument('-j', '--jitter', type=float, dest='jitter', default=0.01,
+                        help="jitter (in arcseconds) affecting the PSF. Default=%(default)s")
     args = parser.parse_args()
 
     # defining verbose level and output options
