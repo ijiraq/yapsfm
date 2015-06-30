@@ -123,6 +123,7 @@ def get_dist(chip, wavelength, position):
     pos = [float(position[i])/100.-20.44 for i in range(2)]  # new position on a 40.88 pixel grid
     logging.debug("the reduced position of the PSF is: %s" % pos)
     local_x = tmp_tbl['Local_x']
+    local_x = [str(-1.*float(local_x[i])) for i in range(len(local_x))]  # measurements from *back* of detector.
     minx = get_min_diff(pos[0], local_x)
     local_y = tmp_tbl[tmp_tbl['Local_x'] == minx]['Local_y']
     miny = get_min_diff(pos[1], local_y)
