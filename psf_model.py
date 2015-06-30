@@ -15,8 +15,8 @@ from modules import Pupil, PSF, PolyPSF
 
 
 def main():
-    usage = "Creates a PSF model for wavelength at input scale.\ncommand line options:\n" \
-            "for monochrome: psf_model.py -s -w -p -c\n" \
+    usage = "Creates a PSF model for wavelength at input scale;\n" \
+            "for monochrome: psf_model.py -s -w -p -c,\n" \
             "for polychrome: psf_model.py -s -b -t -p -c"
 
     parser = ArgumentParser(description=usage)
@@ -45,7 +45,7 @@ def main():
                         help="switch to save all the individual PSFs used to create the polychrome.")
     parser.add_argument('-p', '--position', nargs='+', dest='position', default=[0, 0], action='store',
                         help="position of the computed PSF on the detector. syntax: -p x y with 0 < x y < 4088. "
-                             "Required.")
+                             "Center of the detector is at 2044 2044. Required.")
     parser.add_argument('-c', '--chip', type=int, dest='chip', default=None, action='store',
                         help="chip number (1 to 18). Required")
     parser.add_argument('-j', '--jitter', type=float, dest='jitter', default=0.01, action='store',
