@@ -39,7 +39,8 @@ def main():
     parser.add_argument('-i', '--individual', dest='switch', action='store_true',
                         help="switch to save all the individual PSFs used to create the polychrome.")
     parser.add_argument('-p', '--position', nargs='+', dest='position', default=[0, 0], action='store',
-                        help="position of the computed PSF on the detector. syntax: -p x y with 0 < x y < 4088. "
+                        help="position of the computed PSF on the detector. syntax: -p x y with 0 < x y < 4088. Center"
+                             " of detector is at 2044 2044."
                              "Required.")
     parser.add_argument('-c', '--chip', type=int, dest='chip', default=None, action='store',
                         help="chip number (1 to 18). Required")
