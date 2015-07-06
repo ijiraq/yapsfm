@@ -266,7 +266,8 @@ class Pupil(OpticalArray):
         logging.info("... done")
 
     def _path_diff(self):
-        zernike_modes = [(1, 1), (1, -1), (2, 0), (2, -2), (2, 2), (3, -1), (3, 1), (3, -3), (3, 3), (4, 0)]  # z2..z11
+        # z1..z11
+        zernike_modes = [(0, 0), (1, 1), (1, -1), (2, 0), (2, -2), (2, 2), (3, -1), (3, 1), (3, -3), (3, 3), (4, 0)]
 
         rho_range = np.linspace(0, 1, self.array_size)
         theta_range = np.linspace(0, 2*np.pi, self.array_size)

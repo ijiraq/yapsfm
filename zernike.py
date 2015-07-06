@@ -125,8 +125,12 @@ def get_dist(chip, wavelength, position):
     local_x = tmp_tbl['Local_x']
     local_x = [str(-1.*float(local_x[i])) for i in range(len(local_x))]  # measurements from *back* of detector.
     minx = get_min_diff(pos[0], local_x)
+    if minx == str(-0.0) or minx == str(0.0):
+        minx = str(0)
+    logging.debug("minx, x_position and local_x: %s, %s, %s" % (minx, pos[0], local_x))
     local_y = tmp_tbl[tmp_tbl['Local_x'] == minx]['Local_y']
     miny = get_min_diff(pos[1], local_y)
+    logging.debug("miny, y_position and local_y: %s, %s, %s" % (miny, pos[1], local_y))
     logging.debug("closest measured x,y: %s, %s" % (minx, miny))
 
     new_tbl = tmp_tbl[(tmp_tbl['Local_x'] == minx) & (tmp_tbl['Local_y'] == miny)]  # the corresponding parameters
