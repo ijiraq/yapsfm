@@ -276,7 +276,7 @@ class Pupil(OpticalArray):
         zernike_total = OpticalArray(polar=True, size=self.array_size)
         for i in range(len(zernike_modes)):  # self.dist or zernike_modes ?
             aj = self.dist[i]  # coefficients are given at the corresponding wavelength
-            logging.info("Computing Z%s with aj=%s" % (2+i, aj))
+            logging.info("Computing Z%s with aj=%s" % (1+i, aj))
             n, m = zernike_modes[i][0], zernike_modes[i][1]
             if m < 0.:
                 zernike_value = ze.odd_zernike(n, -m, rho, theta)
